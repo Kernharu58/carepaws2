@@ -1,0 +1,81 @@
+const { z } = require("zod");
+
+const registerSchema = z
+  .object({
+    displayName: z.string().min(2).max(100),
+    email: z.string().email(),
+    password: z.string().min(8).max(128),
+  })
+  .strict();
+
+const loginSchema = z
+  .object({
+    email: z.string().email(),
+    password: z.string().min(1),
+  })
+  .strict();
+
+const googleAuthSchema = z
+  .object({
+    idToken: z.string().min(10),
+    platform: z.enum(["mobile", "web"]).optional(),
+  })
+  .strict();
+
+const forgotPasswordSchema = z
+  .object({
+    email: z.string().email(),
+  })
+  .strict();
+
+const resetPasswordSchema = z
+  .object({
+    token: z.string().min(10),
+    password: z.string().min(8).max(128),
+  })
+  .strict();
+
+const verifyEmailSchema = z
+  .object({
+    token: z.string().min(10),
+  })
+  .strict();
+
+const refreshSchema = z
+  .object({
+    refreshToken: z.string().min(10),
+  })
+  .strict();
+
+
+const updateRoleSchema = z.object({ role: z.enum(["user", "staff", "admin", "super_admin"]) }).strict();
+const updateStatusSchema = z.object({ status: z.enum(["active", "suspended", "locked"]) }).strict();
+const updateVerificationSchema = z
+  .object({
+    identityVerificationStatus: z.enum(["unverified", "pending", "verified", "rejected"]),
+    notes: z.string().max(1000).optional(),
+  })
+  .strict();
+const updateProfileSchema = z
+  .object({
+    displayName: z.string().min(2).max(100).optional(),
+    phone: z.string().optional(),
+    address: z.string().optional(),
+    notificationsEnabled: z.boolean().optional(),
+    pushToken: z.string().optional(),
+  })
+  .strict();
+
+module.exports = {
+  updateRoleSchema,
+  updateStatusSchema,
+  updateVerificationSchema,
+  updateProfileSchema,
+  registerSchema,
+  loginSchema,
+  googleAuthSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  verifyEmailSchema,
+  refreshSchema,
+};

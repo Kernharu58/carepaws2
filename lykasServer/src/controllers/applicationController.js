@@ -1,0 +1,191 @@
+const Application = require("../models/Application");
+const Pet = require("../models/Pet");
+const { buildListQuery, buildSort, buildPagination } = require("../utils/queryBuilder");
+const { writeAuditLog } = require("../utils/auditLogger");
+
+const SEARCH_FIELDS = ["address", "experience"];
+const FILTER_FIELDS = ["status", "stage", "type", "pet", "applicant"];
+
+// GET /api/applications/my
+async function myApplications(req, res, next) {
+  try {
+    const applications = await Application.find({ applicant: req.user._id }).populate("pet").sort({ createdAt: -1 });
+    return res.json({ success: true, data: applications });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// GET /api/applications — staff
+async function listApplications(req, res, next) {
+  try {
+    const filter = buildListQuery(req.query, { searchFields: SEARCH_FIELDS, filterFields: FILTER_FIELDS, allowIncludeDeleted: false });
+    const sort = buildSort(req.query);
+    const total = await Application.countDocuments(filter);
+    const { page, limit, skip, ...paginationRest } = buildPagination(total, req.query.page, req.query.limit);
+
+    const data = await Application.find(filter).populate("pet applicant").sort(sort).skip(skip).limit(limit);
+
+    return res.json({ success: true, data, pagination: { page, limit, ...paginationRest } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// GET /api/applications/:id
+async function getApplication(req, res, next) {
+  try {
+    const application = await Application.findById(req.params.id).populate("pet applicant reviewedBy");
+    if (!application) return res.status(404).json({ success: false, message: "Application not found" });
+
+    const isOwner = application.applicant._id.toString() === req.user._id.toString();
+    const isStaff = ["staff", "admin", "super_admin"].includes(req.user.role);
+    if (!isOwner && !isStaff) {
+      return res.status(403).json({ success: false, message: "Not authorized to view this application" });
+    }
+
+    const result = application.toObject();
+    if (!isStaff) delete result.internalNotes; // internal notes are hidden from the applicant
+
+    return res.json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// POST /api/applications
+async function createApplication(req, res, next) {
+  try {
+    const pet = await Pet.findOne({ _id: req.body.pet, isDeleted: { $ne: true } });
+    if (!pet) return res.status(404).json({ success: false, message: "Pet not found" });
+    if (pet.status !== "Available") {
+      return res.status(409).json({ success: false, message: "This pet is not currently available" });
+    }
+
+    const application = await Application.create({
+      ...req.body,
+      applicant: req.user._id,
+      stageHistory: [{ stage: "submitted", changedBy: req.user._id, note: "Application submitted" }],
+    });
+
+    pet.status = "Pending";
+    await pet.save();
+
+    return res.status(201).json({ success: true, data: application });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// PUT /api/applications/:id/status — staff
+async function updateStatus(req, res, next) {
+  try {
+    const application = await Application.findById(req.params.id);
+    if (!application) return res.status(404).json({ success: false, message: "Application not found" });
+
+    const previousValues = { status: application.status };
+    application.status = req.body.status;
+    application.reviewedBy = req.user._id;
+    application.reviewedAt = new Date();
+    await application.save();
+
+    if (req.body.status === "approved") {
+      await Pet.findByIdAndUpdate(application.pet, { status: "Adopted" });
+    } else if (req.body.status === "rejected") {
+      await Pet.findByIdAndUpdate(application.pet, { status: "Available" });
+    }
+
+    await writeAuditLog({
+      actor: req.user._id,
+      action: "application.status_update",
+      entityType: "Application",
+      entityId: application._id,
+      previousValues,
+      newValues: { status: application.status },
+      req,
+    });
+
+    return res.json({ success: true, data: application });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// PUT /api/applications/:id/stage — staff, moves the pipeline stage tracker
+async function updateStage(req, res, next) {
+  try {
+    const application = await Application.findById(req.params.id);
+    if (!application) return res.status(404).json({ success: false, message: "Application not found" });
+
+    const previousStage = application.stage;
+    application.stage = req.body.stage;
+    application.stageHistory.push({ stage: req.body.stage, changedBy: req.user._id, note: req.body.note });
+    await application.save();
+
+    await writeAuditLog({
+      actor: req.user._id,
+      action: "application.stage_update",
+      entityType: "Application",
+      entityId: application._id,
+      previousValues: { stage: previousStage },
+      newValues: { stage: application.stage },
+      req,
+    });
+
+    return res.json({ success: true, data: application });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// GET /api/applications/:id/notes — staff
+async function getNotes(req, res, next) {
+  try {
+    const application = await Application.findById(req.params.id).select("internalNotes").populate("internalNotes.author", "displayName");
+    if (!application) return res.status(404).json({ success: false, message: "Application not found" });
+    return res.json({ success: true, data: application.internalNotes });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// POST /api/applications/:id/notes — staff
+async function addNote(req, res, next) {
+  try {
+    const application = await Application.findById(req.params.id);
+    if (!application) return res.status(404).json({ success: false, message: "Application not found" });
+
+    application.internalNotes.push({ author: req.user._id, text: req.body.text });
+    await application.save();
+
+    return res.status(201).json({ success: true, data: application.internalNotes });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// DELETE /api/applications/:id — staff
+async function deleteApplication(req, res, next) {
+  try {
+    const application = await Application.findByIdAndDelete(req.params.id);
+    if (!application) return res.status(404).json({ success: false, message: "Application not found" });
+
+    await writeAuditLog({ actor: req.user._id, action: "application.delete", entityType: "Application", entityId: application._id, req });
+
+    return res.json({ success: true, message: "Application deleted" });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = {
+  myApplications,
+  listApplications,
+  getApplication,
+  createApplication,
+  updateStatus,
+  updateStage,
+  getNotes,
+  addNote,
+  deleteApplication,
+};

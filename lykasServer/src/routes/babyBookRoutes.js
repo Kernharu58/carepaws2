@@ -1,0 +1,65 @@
+const express = require("express");
+const router = express.Router();
+const BabyBook = require("../models/BabyBook");
+const Pet = require("../models/Pet");
+const { protect } = require("../middleware/authMiddleware");
+
+router.get("/my", protect, async (req, res, next) => {
+  try {
+    const myPets = await Pet.find({ owner: req.user._id }).select("_id");
+    const entries = await BabyBook.find({ pet: { $in: myPets.map((p) => p._id) } }).sort({ date: -1 });
+    res.json({ success: true, data: entries });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/entry/:id", protect, async (req, res, next) => {
+  try {
+    const entry = await BabyBook.findById(req.params.id);
+    if (!entry) return res.status(404).json({ success: false, message: "Entry not found" });
+    res.json({ success: true, data: entry });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/", protect, async (req, res, next) => {
+  try {
+    const entry = await BabyBook.create({ ...req.body, addedBy: req.user._id });
+    res.status(201).json({ success: true, data: entry });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put("/entry/:id", protect, async (req, res, next) => {
+  try {
+    const entry = await BabyBook.findOneAndUpdate({ _id: req.params.id, addedBy: req.user._id }, req.body, { new: true });
+    if (!entry) return res.status(404).json({ success: false, message: "Entry not found" });
+    res.json({ success: true, data: entry });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete("/entry/:id", protect, async (req, res, next) => {
+  try {
+    const entry = await BabyBook.findOneAndDelete({ _id: req.params.id, addedBy: req.user._id });
+    if (!entry) return res.status(404).json({ success: false, message: "Entry not found" });
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/:petId", protect, async (req, res, next) => {
+  try {
+    const entries = await BabyBook.find({ pet: req.params.petId }).sort({ date: -1 });
+    res.json({ success: true, data: entries });
+  } catch (err) {
+    next(err);
+  }
+});
+
+module.exports = router;

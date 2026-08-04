@@ -1,0 +1,60 @@
+import { useEffect, useState } from "react";
+import { useSearchParams, Link } from "react-router-dom";
+import { PawPrint, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { api, getApiErrorMessage } from "../services/api";
+
+export default function VerifyEmail() {
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get("token") ?? "";
+  const [status, setStatus] = useState<"verifying" | "success" | "error">("verifying");
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    if (!token) {
+      setStatus("error");
+      setMessage("This verification link is missing its token.");
+      return;
+    }
+    api
+      .post("/api/auth/verify-email", { token })
+      .then(() => setStatus("success"))
+      .catch((err) => {
+        setStatus("error");
+        setMessage(getApiErrorMessage(err, "Verification failed"));
+      });
+  }, [token]);
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+      <div className="w-full max-w-sm text-center">
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+          <PawPrint className="h-6 w-6 text-primary" aria-hidden="true" />
+        </div>
+
+        <div className="animate-in rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          {status === "verifying" && (
+            <div className="flex flex-col items-center gap-2">
+              <Loader2 className="h-8 w-8 animate-spin text-gray-400" aria-hidden="true" />
+              <p className="text-sm text-gray-600">Verifying your email…</p>
+            </div>
+          )}
+          {status === "success" && (
+            <div className="flex flex-col items-center gap-2">
+              <CheckCircle2 className="h-8 w-8 text-status-success" aria-hidden="true" />
+              <p className="text-sm text-gray-700">Your email has been verified.</p>
+              <Link to="/login" className="mt-2 text-sm text-primary hover:underline">
+                Continue to sign in
+              </Link>
+            </div>
+          )}
+          {status === "error" && (
+            <div className="flex flex-col items-center gap-2">
+              <XCircle className="h-8 w-8 text-status-danger" aria-hidden="true" />
+              <p className="text-sm text-gray-700">{message}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

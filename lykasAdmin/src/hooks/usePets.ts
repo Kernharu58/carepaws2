@@ -1,0 +1,104 @@
+import { useCallback, useState } from "react";
+import { api, getApiErrorMessage } from "../services/api";
+import { useResourceList } from "./useResourceList";
+
+export interface Pet {
+  _id: string;
+  name: string;
+  species: "Dog" | "Cat" | "Other";
+  breed?: string;
+  age?: number;
+  gender?: "Male" | "Female";
+  size?: "Small" | "Medium" | "Large";
+  temperament?: string;
+  energyLevel?: "Low" | "Medium" | "High";
+  status: "Available" | "Pending" | "Adopted" | "Foster";
+  imageUrl?: string | null;
+  healthStatus?: string;
+  description?: string;
+}
+
+/**
+ * Pet list + CRUD, built on the shared list hook (§7.3) plus the
+ * mutation calls PetManagement/ManagePets need. Uses /api/pets/admin so
+ * staff see the full set (including Adopted/Foster/soft-deleted),
+ * unlike the public /api/pets catalog endpoint.
+ */
+export function usePets() {
+  const list = useResourceList<Pet>("/api/pets/admin");
+  const [mutating, setMutating] = useState(false);
+  const [mutationError, setMutationError] = useState<string | null>(null);
+
+  const createPet = useCallback(
+    async (formData: FormData) => {
+      setMutating(true);
+      setMutationError(null);
+      try {
+        await api.post("/api/pets", formData, { headers: { "Content-Type": "multipart/form-data" } });
+        list.reload();
+        return true;
+      } catch (err) {
+        setMutationError(getApiErrorMessage(err, "Failed to create pet"));
+        return false;
+      } finally {
+        setMutating(false);
+      }
+    },
+    [list]
+  );
+
+  const updatePet = useCallback(
+    async (id: string, formData: FormData) => {
+      setMutating(true);
+      setMutationError(null);
+      try {
+        await api.put(`/api/pets/${id}`, formData, { headers: { "Content-Type": "multipart/form-data" } });
+        list.reload();
+        return true;
+      } catch (err) {
+        setMutationError(getApiErrorMessage(err, "Failed to update pet"));
+        return false;
+      } finally {
+        setMutating(false);
+      }
+    },
+    [list]
+  );
+
+  const deletePet = useCallback(
+    async (id: string) => {
+      setMutating(true);
+      setMutationError(null);
+      try {
+        await api.delete(`/api/pets/${id}`);
+        list.reload();
+        return true;
+      } catch (err) {
+        setMutationError(getApiErrorMessage(err, "Failed to archive pet"));
+        return false;
+      } finally {
+        setMutating(false);
+      }
+    },
+    [list]
+  );
+
+  const restorePet = useCallback(
+    async (id: string) => {
+      setMutating(true);
+      try {
+        await api.post(`/api/pets/${id}/restore`);
+        list.reload();
+        return true;
+      } catch (err) {
+        setMutationError(getApiErrorMessage(err, "Failed to restore pet"));
+        return false;
+      } finally {
+        setMutating(false);
+      }
+    },
+    [list]
+  );
+
+  return { ...list, createPet, updatePet, deletePet, restorePet, mutating, mutationError };
+}

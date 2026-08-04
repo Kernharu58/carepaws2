@@ -1,0 +1,56 @@
+name: lykasAdmin CI
+
+on:
+  pull_request:
+    paths:
+      - "lykasAdmin/**"
+  push:
+    branches: [main, develop, staging]
+    paths:
+      - "lykasAdmin/**"
+
+defaults:
+  run:
+    working-directory: lykasAdmin
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: lykasAdmin/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npx tsc -b --noEmit
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_API_URL: https://staging-api.example.com
+          VITE_GOOGLE_CLIENT_ID: ""
+
+      - name: Audit dependencies (fail on new high/critical)
+        run: npm audit --audit-level=high
+
+  build-image:
+    needs: ci
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build -t carepaws-admin:${{ github.sha }} ./lykasAdmin

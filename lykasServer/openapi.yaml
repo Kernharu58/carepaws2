@@ -321,3 +321,350 @@ paths:
       summary: List conversations, most-recent-first (staff only)
       responses:
         "200": { description: Conversation list }
+
+  /api/auth/users:
+    get:
+      summary: List all user accounts (admin), with search/filter/pagination
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string }
+        - in: query
+          name: role
+          schema: { type: string, enum: [user, staff, admin, super_admin] }
+        - in: query
+          name: status
+          schema: { type: string, enum: [active, suspended, locked] }
+      responses:
+        "200": { description: Paginated user list }
+
+  /api/auth/users/{id}/role:
+    put:
+      summary: Change a user's role (super_admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role: { type: string, enum: [user, staff, admin, super_admin] }
+      responses:
+        "200": { description: Role updated }
+
+  /api/auth/users/{id}/status:
+    put:
+      summary: Suspend, lock, or reactivate a user account (admin)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [active, suspended, locked] }
+      responses:
+        "200": { description: Status updated — suspending also revokes all active sessions }
+
+  /api/volunteers/register:
+    post:
+      summary: Submit a volunteer application (self-service)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, address]
+              properties:
+                phone: { type: string }
+                address: { type: string }
+                motivation: { type: string }
+                availability:
+                  type: array
+                  items: { type: string, enum: ["Weekday mornings", "Weekday afternoons", "Weekends", "Flexible"] }
+      responses:
+        "201": { description: Application submitted, status starts as "pending" }
+        "409": { description: Applicant already has a volunteer application on file }
+
+  /api/volunteers/{id}/status:
+    put:
+      summary: Approve or reject a volunteer application (staff)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [pending, approved, rejected, inactive] }
+      responses:
+        "200": { description: Updated }
+
+  /api/foster:
+    post:
+      summary: Assign a pet to a foster (staff) — also sets the pet's status to Foster
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pet, fosterer, startDate]
+              properties:
+                pet: { type: string }
+                fosterer: { type: string }
+                startDate: { type: string, format: date }
+                weeklyReportsRequired: { type: integer }
+      responses:
+        "201": { description: Foster placement created }
+    get:
+      summary: List all foster placements (staff)
+      responses:
+        "200": { description: Foster placement list }
+
+  /api/foster/{id}/end:
+    put:
+      summary: End a foster placement (staff) — sets pet status based on outcome
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [outcome]
+              properties:
+                outcome: { type: string, enum: [ADOPTED, RETURNED, EXTENDED] }
+      responses:
+        "200": { description: "Placement ended. ADOPTED -> pet becomes Adopted; RETURNED/EXTENDED -> pet becomes Available." }
+
+  /api/foster/{fosterId}/reports:
+    post:
+      summary: Submit a weekly foster report
+      parameters:
+        - in: path
+          name: fosterId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [weekNumber]
+              properties:
+                weekNumber: { type: integer }
+                overallProgress: { type: string, enum: [Excellent, Good, Fair, "Needs Attention"] }
+      responses:
+        "201": { description: Report recorded, increments the foster's weeklyReportsSubmitted counter }
+
+  /api/events:
+    get:
+      summary: List events (public)
+      security: []
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [upcoming, ongoing, completed, cancelled] }
+      responses:
+        "200": { description: Event list }
+    post:
+      summary: Create an event (staff)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, category, date]
+              properties:
+                title: { type: string }
+                category: { type: string, enum: ["Adoption Drive", Fundraiser, Training, Community, Volunteer, Other] }
+                date: { type: string, format: date-time }
+      responses:
+        "201": { description: Event created }
+
+  /api/events/{id}/register:
+    post:
+      summary: Register for an event
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "201": { description: Registered }
+        "409": { description: Event is full, or already registered }
+
+  /api/notifications/my:
+    get:
+      summary: The current user's notifications, newest-first
+      responses:
+        "200": { description: Notification list }
+
+  /api/notifications/unread-count:
+    get:
+      summary: Unread notification count for the current user
+      responses:
+        "200": { description: "{ count: number }" }
+
+  /api/interviews:
+    post:
+      summary: Schedule an adoption interview (staff)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [application, applicant, pet, scheduledDate, method]
+              properties:
+                method: { type: string, enum: ["In-person", "Video call", "Phone call"] }
+      responses:
+        "201": { description: Interview scheduled, applicant is notified }
+
+  /api/interviews/{id}/complete:
+    put:
+      summary: Record an interview result (staff)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [result]
+              properties:
+                result: { type: string, enum: [passed, failed, pending] }
+      responses:
+        "200": { description: Result recorded, applicant is notified }
+
+  /api/home-visits:
+    post:
+      summary: Schedule a home visit (staff)
+      responses:
+        "201": { description: Home visit scheduled, applicant is notified }
+    get:
+      summary: List home visits (staff)
+      responses:
+        "200": { description: Home visit list }
+
+  /api/donations/goods:
+    post:
+      summary: Submit an in-kind (goods) donation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, dropOff]
+              properties:
+                name: { type: string }
+                quantity: { type: number }
+                dropOff: { type: string, enum: [walk_in, schedule, courier] }
+      responses:
+        "201": { description: Donation recorded, status starts as "pending" }
+
+  /api/inventory/{id}/adjust:
+    post:
+      summary: Adjust inventory stock (staff) — logs a movement and updates quantity atomically
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, quantity]
+              properties:
+                type: { type: string, enum: [restock, usage, adjustment] }
+                quantity: { type: number }
+      responses:
+        "200": { description: Updated inventory item }
+
+  /api/emergency-reports:
+    post:
+      summary: Report a stray, injured, or abused animal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, description]
+              properties:
+                type: { type: string, enum: [stray_animal, injured_animal, abuse_report, abandoned_animal, other] }
+                description: { type: string }
+      responses:
+        "201": { description: Report submitted }
+
+  /api/medical/summary/{petId}:
+    get:
+      summary: Full medical record summary for a pet (vaccinations, vet visits, general records)
+      parameters:
+        - in: path
+          name: petId
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Medical summary }
+
+  /api/dashboard:
+    get:
+      summary: Admin dashboard rollup — pet counts by status, pending applications/volunteers, revenue this month (staff)
+      responses:
+        "200": { description: Dashboard data }
+
+  /api/analytics/overview:
+    get:
+      summary: High-level platform stats — total pets, applications, adoption rate (staff)
+      responses:
+        "200": { description: Overview stats }
+
+x-coverage-note: >
+  This spec covers the routes most central to the core adoption/foster/
+  volunteer/payment flows across all build phases. It intentionally does
+  NOT yet cover every one of the 46 route modules in src/routes/ (e.g.
+  Backups, Migrations, Archive, ContentManagement, Roles, ApiKeys,
+  Settings, FeatureFlags — most GET-list-and-CRUD admin-ops endpoints
+  follow the same shared buildListQuery/buildPagination contract
+  documented in the project spec's §8.2, so their shape is predictable
+  even where not individually spec'd here). Extending this file is a
+  good first task for anyone picking up this codebase — generate
+  request/response schemas from the same zod validators used for input
+  validation (via zod-to-openapi) to keep the two from drifting apart,
+  per §11.9 of the project spec.
+

@@ -55,6 +55,28 @@ services:
       redis:
         condition: service_healthy
 
+  admin:
+    build:
+      context: ./lykasAdmin
+      target: build
+    command: npm run dev -- --host 0.0.0.0
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:5000
+    volumes:
+      - ./lykasAdmin/src:/app/src
+    depends_on:
+      - server
+
+# lykasUser (the mobile app) is intentionally NOT a compose service —
+# Expo/EAS builds natively and doesn't containerize (§11.4). Run it
+# separately with `cd lykasUser && npx expo start`, pointing
+# EXPO_PUBLIC_API_URL at whichever backend you're running (this compose
+# stack's http://localhost:5000 works for a simulator; a physical
+# device needs your machine's LAN IP instead of localhost).
+
 volumes:
   mongo_data:
   redis_data:

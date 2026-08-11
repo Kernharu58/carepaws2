@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 const Announcement = require("../models/Announcement");
 const { protect, adminOnly } = require("../middleware/authMiddleware");
+const validateRequest = require("../middleware/validateRequest");
+const { announcementCreateSchema, announcementUpdateSchema } = require("../validators/announcement.schema");
 
 router.get("/active", async (req, res, next) => {
   try {
@@ -27,7 +29,7 @@ router.get("/", protect, adminOnly, async (req, res, next) => {
   }
 });
 
-router.post("/", protect, adminOnly, async (req, res, next) => {
+router.post("/", protect, adminOnly, validateRequest(announcementCreateSchema), async (req, res, next) => {
   try {
     const announcement = await Announcement.create({ ...req.body, createdBy: req.user._id });
     res.status(201).json({ success: true, data: announcement });
@@ -36,7 +38,7 @@ router.post("/", protect, adminOnly, async (req, res, next) => {
   }
 });
 
-router.put("/:id", protect, adminOnly, async (req, res, next) => {
+router.put("/:id", protect, adminOnly, validateRequest(announcementUpdateSchema), async (req, res, next) => {
   try {
     const announcement = await Announcement.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!announcement) return res.status(404).json({ success: false, message: "Announcement not found" });

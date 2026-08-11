@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 const ContentItem = require("../models/ContentItem");
 const { protect, adminOnly } = require("../middleware/authMiddleware");
+const validateRequest = require("../middleware/validateRequest");
+const { contentCreateSchema, contentUpdateSchema } = require("../validators/content.schema");
 
 router.get("/public", async (req, res, next) => {
   try {
@@ -43,7 +45,7 @@ router.get("/:id", protect, adminOnly, async (req, res, next) => {
   }
 });
 
-router.post("/", protect, adminOnly, async (req, res, next) => {
+router.post("/", protect, adminOnly, validateRequest(contentCreateSchema), async (req, res, next) => {
   try {
     const item = await ContentItem.create({ ...req.body, lastEditedBy: req.user._id });
     res.status(201).json({ success: true, data: item });
@@ -52,7 +54,7 @@ router.post("/", protect, adminOnly, async (req, res, next) => {
   }
 });
 
-router.put("/:id", protect, adminOnly, async (req, res, next) => {
+router.put("/:id", protect, adminOnly, validateRequest(contentUpdateSchema), async (req, res, next) => {
   try {
     const item = await ContentItem.findById(req.params.id);
     if (!item) return res.status(404).json({ success: false, message: "Content not found" });

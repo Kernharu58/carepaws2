@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 const EmergencyReport = require("../models/EmergencyReport");
 const { protect, adminOnly } = require("../middleware/authMiddleware");
+const validateRequest = require("../middleware/validateRequest");
+const { emergencyReportCreateSchema, emergencyReportUpdateSchema } = require("../validators/emergencyReport.schema");
 
 router.get("/my", protect, async (req, res, next) => {
   try {
@@ -12,7 +14,7 @@ router.get("/my", protect, async (req, res, next) => {
   }
 });
 
-router.post("/", protect, async (req, res, next) => {
+router.post("/", protect, validateRequest(emergencyReportCreateSchema), async (req, res, next) => {
   try {
     const report = await EmergencyReport.create({ ...req.body, submittedBy: req.user._id });
     res.status(201).json({ success: true, data: report });
@@ -43,7 +45,7 @@ router.get("/:id", protect, adminOnly, async (req, res, next) => {
   }
 });
 
-router.put("/:id", protect, adminOnly, async (req, res, next) => {
+router.put("/:id", protect, adminOnly, validateRequest(emergencyReportUpdateSchema), async (req, res, next) => {
   try {
     const report = await EmergencyReport.findById(req.params.id);
     if (!report) return res.status(404).json({ success: false, message: "Report not found" });

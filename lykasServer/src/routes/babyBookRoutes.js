@@ -3,6 +3,8 @@ const router = express.Router();
 const BabyBook = require("../models/BabyBook");
 const Pet = require("../models/Pet");
 const { protect } = require("../middleware/authMiddleware");
+const validateRequest = require("../middleware/validateRequest");
+const { babyBookCreateSchema, babyBookUpdateSchema } = require("../validators/babyBook.schema");
 
 router.get("/my", protect, async (req, res, next) => {
   try {
@@ -24,7 +26,7 @@ router.get("/entry/:id", protect, async (req, res, next) => {
   }
 });
 
-router.post("/", protect, async (req, res, next) => {
+router.post("/", protect, validateRequest(babyBookCreateSchema), async (req, res, next) => {
   try {
     const entry = await BabyBook.create({ ...req.body, addedBy: req.user._id });
     res.status(201).json({ success: true, data: entry });
@@ -33,7 +35,7 @@ router.post("/", protect, async (req, res, next) => {
   }
 });
 
-router.put("/entry/:id", protect, async (req, res, next) => {
+router.put("/entry/:id", protect, validateRequest(babyBookUpdateSchema), async (req, res, next) => {
   try {
     const entry = await BabyBook.findOneAndUpdate({ _id: req.params.id, addedBy: req.user._id }, req.body, { new: true });
     if (!entry) return res.status(404).json({ success: false, message: "Entry not found" });

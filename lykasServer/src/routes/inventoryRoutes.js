@@ -3,6 +3,8 @@ const router = express.Router();
 const InventoryItem = require("../models/InventoryItem");
 const { protect, adminOnly } = require("../middleware/authMiddleware");
 const { buildListQuery, buildSort, buildPagination } = require("../utils/queryBuilder");
+const validateRequest = require("../middleware/validateRequest");
+const { inventoryItemSchema, inventoryUpdateSchema, inventoryAdjustSchema } = require("../validators/inventory.schema");
 
 router.get("/summary", protect, adminOnly, async (req, res, next) => {
   try {
@@ -37,7 +39,7 @@ router.get("/:id", protect, adminOnly, async (req, res, next) => {
   }
 });
 
-router.post("/", protect, adminOnly, async (req, res, next) => {
+router.post("/", protect, adminOnly, validateRequest(inventoryItemSchema), async (req, res, next) => {
   try {
     const item = await InventoryItem.create(req.body);
     res.status(201).json({ success: true, data: item });
@@ -46,7 +48,7 @@ router.post("/", protect, adminOnly, async (req, res, next) => {
   }
 });
 
-router.put("/:id", protect, adminOnly, async (req, res, next) => {
+router.put("/:id", protect, adminOnly, validateRequest(inventoryUpdateSchema), async (req, res, next) => {
   try {
     const item = await InventoryItem.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!item) return res.status(404).json({ success: false, message: "Item not found" });
@@ -57,7 +59,7 @@ router.put("/:id", protect, adminOnly, async (req, res, next) => {
 });
 
 // POST /api/inventory/:id/adjust — logs a movement and updates quantity atomically
-router.post("/:id/adjust", protect, adminOnly, async (req, res, next) => {
+router.post("/:id/adjust", protect, adminOnly, validateRequest(inventoryAdjustSchema), async (req, res, next) => {
   try {
     const { type, quantity, note } = req.body;
     const item = await InventoryItem.findById(req.params.id);

@@ -3,11 +3,13 @@ const router = express.Router();
 
 const c = require("../controllers/inKindDonationController");
 const { protect, adminOnly } = require("../middleware/authMiddleware");
+const validateRequest = require("../middleware/validateRequest");
+const { inKindDonationCreateSchema, inKindDonationStatusSchema } = require("../validators/inKindDonation.schema");
 
-router.post("/", protect, c.create);
+router.post("/", protect, validateRequest(inKindDonationCreateSchema), c.create);
 router.get("/my", protect, c.myDonations);
 router.get("/", protect, adminOnly, c.list);
-router.patch("/:id/status", protect, adminOnly, c.updateStatus);
+router.patch("/:id/status", protect, adminOnly, validateRequest(inKindDonationStatusSchema), c.updateStatus);
 router.delete("/:id", protect, adminOnly, c.remove);
 router.post("/:id/restore", protect, adminOnly, c.restore);
 

@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 const Feedback = require("../models/Feedback");
 const { protect, adminOnly } = require("../middleware/authMiddleware");
+const validateRequest = require("../middleware/validateRequest");
+const { feedbackCreateSchema, feedbackUpdateSchema } = require("../validators/feedback.schema");
 
 router.get("/public", async (req, res, next) => {
   try {
@@ -24,7 +26,7 @@ router.get("/my", protect, async (req, res, next) => {
   }
 });
 
-router.post("/", protect, async (req, res, next) => {
+router.post("/", protect, validateRequest(feedbackCreateSchema), async (req, res, next) => {
   try {
     const feedback = await Feedback.create({ ...req.body, submittedBy: req.user._id });
     res.status(201).json({ success: true, data: feedback });
@@ -55,7 +57,7 @@ router.get("/:id", protect, adminOnly, async (req, res, next) => {
   }
 });
 
-router.put("/:id", protect, adminOnly, async (req, res, next) => {
+router.put("/:id", protect, adminOnly, validateRequest(feedbackUpdateSchema), async (req, res, next) => {
   try {
     const feedback = await Feedback.findById(req.params.id);
     if (!feedback) return res.status(404).json({ success: false, message: "Feedback not found" });

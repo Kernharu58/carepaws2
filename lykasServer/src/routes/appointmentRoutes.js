@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 const Appointment = require("../models/Appointment");
 const { protect, adminOnly } = require("../middleware/authMiddleware");
+const validateRequest = require("../middleware/validateRequest");
+const { appointmentCreateSchema, appointmentUpdateSchema, appointmentEnrollSchema } = require("../validators/appointment.schema");
 
 router.get("/", async (req, res, next) => {
   try {
@@ -12,7 +14,7 @@ router.get("/", async (req, res, next) => {
   }
 });
 
-router.post("/", protect, adminOnly, async (req, res, next) => {
+router.post("/", protect, adminOnly, validateRequest(appointmentCreateSchema), async (req, res, next) => {
   try {
     const appointment = await Appointment.create(req.body);
     res.status(201).json({ success: true, data: appointment });
@@ -34,7 +36,7 @@ router.get("/my-appointments", protect, async (req, res, next) => {
   }
 });
 
-router.post("/:id/enroll", protect, async (req, res, next) => {
+router.post("/:id/enroll", protect, validateRequest(appointmentEnrollSchema), async (req, res, next) => {
   try {
     const appointment = await Appointment.findById(req.params.id);
     if (!appointment) return res.status(404).json({ success: false, message: "Appointment not found" });
@@ -70,7 +72,7 @@ router.post("/:id/cancel", protect, async (req, res, next) => {
   }
 });
 
-router.put("/:id", protect, adminOnly, async (req, res, next) => {
+router.put("/:id", protect, adminOnly, validateRequest(appointmentUpdateSchema), async (req, res, next) => {
   try {
     const appointment = await Appointment.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!appointment) return res.status(404).json({ success: false, message: "Appointment not found" });

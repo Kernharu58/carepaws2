@@ -2,6 +2,14 @@ const express = require("express");
 const router = express.Router();
 const { HealthCheck, FeedingLog, BehavioralObservation, CageAssignment, QuarantinePeriod } = require("../models/ShelterCare");
 const { protect, adminOnly } = require("../middleware/authMiddleware");
+const validateRequest = require("../middleware/validateRequest");
+const {
+  healthCheckSchema,
+  feedingLogSchema,
+  behavioralObsSchema,
+  cageAssignmentSchema,
+  quarantineSchema,
+} = require("../validators/shelterCare.schema");
 
 // GET /api/shelter-care/summary/:petId — a rollup across all five sub-concerns
 router.get("/summary/:petId", protect, adminOnly, async (req, res, next) => {
@@ -21,7 +29,7 @@ router.get("/summary/:petId", protect, adminOnly, async (req, res, next) => {
 });
 
 // --- Health checks ---
-router.post("/health-checks", protect, adminOnly, async (req, res, next) => {
+router.post("/health-checks", protect, adminOnly, validateRequest(healthCheckSchema), async (req, res, next) => {
   try {
     const doc = await HealthCheck.create({ ...req.body, checkedBy: req.user._id });
     res.status(201).json({ success: true, data: doc });
@@ -47,7 +55,7 @@ router.get("/health-checks/:petId", protect, adminOnly, async (req, res, next) =
 });
 
 // --- Feeding logs ---
-router.post("/feeding-logs", protect, adminOnly, async (req, res, next) => {
+router.post("/feeding-logs", protect, adminOnly, validateRequest(feedingLogSchema), async (req, res, next) => {
   try {
     const doc = await FeedingLog.create({ ...req.body, loggedBy: req.user._id });
     res.status(201).json({ success: true, data: doc });
@@ -65,7 +73,7 @@ router.get("/feeding-logs/:petId", protect, adminOnly, async (req, res, next) =>
 });
 
 // --- Behavioral observations ---
-router.post("/behavioral-obs", protect, adminOnly, async (req, res, next) => {
+router.post("/behavioral-obs", protect, adminOnly, validateRequest(behavioralObsSchema), async (req, res, next) => {
   try {
     const doc = await BehavioralObservation.create({ ...req.body, observedBy: req.user._id });
     res.status(201).json({ success: true, data: doc });
@@ -83,7 +91,7 @@ router.get("/behavioral-obs/:petId", protect, adminOnly, async (req, res, next) 
 });
 
 // --- Cage assignments ---
-router.post("/cages", protect, adminOnly, async (req, res, next) => {
+router.post("/cages", protect, adminOnly, validateRequest(cageAssignmentSchema), async (req, res, next) => {
   try {
     // Release any existing active assignment for this pet before creating a new one.
     await CageAssignment.updateMany({ pet: req.body.pet, isActive: true }, { isActive: false, releasedAt: new Date() });
@@ -120,7 +128,7 @@ router.delete("/cages/:assignmentId", protect, adminOnly, async (req, res, next)
 });
 
 // --- Quarantine periods ---
-router.post("/quarantine", protect, adminOnly, async (req, res, next) => {
+router.post("/quarantine", protect, adminOnly, validateRequest(quarantineSchema), async (req, res, next) => {
   try {
     const doc = await QuarantinePeriod.create({ ...req.body, startedBy: req.user._id });
     res.status(201).json({ success: true, data: doc });

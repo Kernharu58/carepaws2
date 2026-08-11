@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 const MonitoringReport = require("../models/MonitoringReport");
 const { protect, adminOnly } = require("../middleware/authMiddleware");
+const validateRequest = require("../middleware/validateRequest");
+const { monitoringReportCreateSchema, monitoringReportReviewSchema } = require("../validators/monitoringReport.schema");
 
 router.get("/my", protect, async (req, res, next) => {
   try {
@@ -30,7 +32,7 @@ router.get("/pet/:petId", protect, adminOnly, async (req, res, next) => {
   }
 });
 
-router.post("/", protect, async (req, res, next) => {
+router.post("/", protect, validateRequest(monitoringReportCreateSchema), async (req, res, next) => {
   try {
     const report = await MonitoringReport.create({ ...req.body, submittedBy: req.user._id });
     res.status(201).json({ success: true, data: report });
@@ -60,7 +62,7 @@ router.get("/:id", protect, async (req, res, next) => {
   }
 });
 
-router.put("/:id/review", protect, adminOnly, async (req, res, next) => {
+router.put("/:id/review", protect, adminOnly, validateRequest(monitoringReportReviewSchema), async (req, res, next) => {
   try {
     const report = await MonitoringReport.findById(req.params.id);
     if (!report) return res.status(404).json({ success: false, message: "Report not found" });

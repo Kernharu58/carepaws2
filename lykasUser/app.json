@@ -56,9 +56,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "REPLACE_WITH_YOUR_OWN_EAS_PROJECT_ID"
+        "projectId": "e00f9643-8c68-4a31-8bd7-26f78e8f8586"
       }
     },
-    "owner": "REPLACE_WITH_YOUR_OWN_EXPO_ACCOUNT"
+    "owner": "topblacks-team"
   }
 }

@@ -12,7 +12,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#FDFAF4"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.kernharu.carepaws",
@@ -27,7 +29,16 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1E6B45"
       },
-      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE", "NOTIFICATIONS"]
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "NOTIFICATIONS",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "NOTIFICATIONS"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -59,6 +70,12 @@
         "projectId": "e00f9643-8c68-4a31-8bd7-26f78e8f8586"
       }
     },
-    "owner": "topblacks-team"
+    "owner": "topblacks-team",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/e00f9643-8c68-4a31-8bd7-26f78e8f8586"
+    }
   }
 }

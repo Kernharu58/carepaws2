@@ -2,6 +2,10 @@ const { createClient } = require("redis");
 const logger = require("../utils/logger");
 
 let client = null;
+let resolveReady;
+const readyPromise = new Promise((resolve) => {
+  resolveReady = resolve;
+});
 
 /**
  * Connects to Redis once at boot. Used to back:
@@ -32,6 +36,7 @@ async function connectRedis() {
   client.on("reconnecting", () => logger.warn("Redis reconnecting"));
 
   await client.connect();
+  resolveReady(client);
   return client;
 }
 
@@ -42,4 +47,16 @@ function getRedisClient() {
   return client;
 }
 
-module.exports = { connectRedis, getRedisClient };
+/**
+ * Like getRedisClient(), but for consumers that are built (not just used)
+ * before connectRedis() has resolved — e.g. rateLimitMiddleware.js, which
+ * constructs its RedisStore instances at module-load time, well before
+ * server.js's start() ever calls connectRedis(). Returns a promise that
+ * only resolves once the client is actually connected, instead of
+ * throwing immediately.
+ */
+function getRedisClientAsync() {
+  return readyPromise;
+}
+
+module.exports = { connectRedis, getRedisClient, getRedisClientAsync };

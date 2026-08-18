@@ -198,3 +198,15 @@ if (require.main === module) {
 }
 
 module.exports = { app, server, io };
+
+
+// Must be the first import in your app
+const Sentry = require("@sentry/node");
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN, // Reads from Render environment variables
+  tracesSampleRate: 1.0,        // Capture 100% of transactions for performance monitoring
+});
+
+// Your Redis and Express code goes here
+

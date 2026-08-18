@@ -1,6 +1,6 @@
 const rateLimit = require("express-rate-limit");
 const { RedisStore } = require("rate-limit-redis");
-const { getRedisClient } = require("../config/redis");
+const { getRedisClientAsync } = require("../config/redis");
 
 /**
  * All four limiters below share a Redis-backed store instead of the
@@ -11,7 +11,10 @@ const { getRedisClient } = require("../config/redis");
  */
 function redisStore(prefix) {
   return new RedisStore({
-    sendCommand: (...args) => getRedisClient().sendCommand(args),
+    sendCommand: async (...args) => {
+      const client = await getRedisClientAsync();
+      return client.sendCommand(args);
+    },
     prefix: `rl:${prefix}:`,
   });
 }

@@ -8,7 +8,6 @@ import StatusBadge from "../components/ui/StatusBadge";
 import Modal from "../components/ui/Modal";
 import Button from "../components/ui/Button";
 import Alert from "../components/ui/Alert";
-import { Select } from "../components/ui/FormUI";
 import TextArea from "../components/ui/TextArea";
 import { useToast } from "../context/ToastContext";
 

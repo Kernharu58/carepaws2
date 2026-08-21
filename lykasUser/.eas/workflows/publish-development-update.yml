@@ -1,0 +1,15 @@
+name: Publish development update
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  publish_update:
+    name: Publish development update
+    type: update
+    params:
+      channel: development
+      message: "Development update"
+      platform: android

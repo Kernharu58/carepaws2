@@ -1,4 +1,4 @@
-name: Publish development update
+name: Publish preview update
 
 on:
   push:
@@ -6,10 +6,11 @@ on:
       - main
 
 jobs:
-  publish_update:
-    name: Publish development update
+  publish_preview_update:
+    name: Publish preview update
     type: update
+    environment: preview
     params:
-      channel: development
-      message: "Development update"
+      channel: preview
+      message: "Preview update"
       platform: android

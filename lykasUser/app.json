@@ -20,7 +20,8 @@
       "bundleIdentifier": "com.kernharu.carepaws",
       "infoPlist": {
         "NSCameraUsageDescription": "CarePaws uses your camera to let you photograph pets and upload documents.",
-        "NSPhotoLibraryUsageDescription": "CarePaws uses your photo library to attach pet photos and documents."
+        "NSPhotoLibraryUsageDescription": "CarePaws uses your photo library to attach pet photos and documents.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {

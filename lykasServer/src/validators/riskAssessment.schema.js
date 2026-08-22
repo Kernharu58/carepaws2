@@ -23,4 +23,8 @@ const riskAssessmentCreateSchema = z
   })
   .strict();
 
-module.exports = { riskAssessmentCreateSchema };
+const riskAssessmentUpdateSchema = riskAssessmentCreateSchema
+  .partial()
+  .extend({ scores: riskAssessmentCreateSchema.shape.scores.partial().optional() });
+
+module.exports = { riskAssessmentCreateSchema, riskAssessmentUpdateSchema };

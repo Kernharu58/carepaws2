@@ -1,4 +1,5 @@
 const RiskAssessment = require("../models/RiskAssessment");
+const Application = require("../models/Application");
 
 // GET /api/risk-assessments/application/:applicationId
 async function byApplication(req, res, next) {
@@ -16,7 +17,19 @@ async function byApplication(req, res, next) {
 // pre-save hook — never accepted from the client (§5.2).
 async function create(req, res, next) {
   try {
-    const assessment = await RiskAssessment.create({ ...req.body, assessedBy: req.user._id });
+    const application = await Application.findById(req.body.application).select("applicant pet status type");
+    if (!application) return res.status(404).json({ success: false, message: "Application not found" });
+    if (application.status === "rejected") return res.status(409).json({ success: false, message: "Cannot assess a rejected application" });
+
+    const existing = await RiskAssessment.findOne({ application: application._id });
+    if (existing) return res.status(409).json({ success: false, message: "A risk assessment already exists for this application" });
+
+    const assessment = await RiskAssessment.create({
+      ...req.body,
+      applicant: application.applicant,
+      pet: application.pet,
+      assessedBy: req.user._id,
+    });
     return res.status(201).json({ success: true, data: assessment });
   } catch (err) {
     next(err);
@@ -50,12 +63,20 @@ async function update(req, res, next) {
     const assessment = await RiskAssessment.findById(req.params.id);
     if (!assessment) return res.status(404).json({ success: false, message: "Risk assessment not found" });
 
+    if (req.body.application) {
+      const application = await Application.findById(req.body.application).select("applicant pet status");
+      if (!application) return res.status(404).json({ success: false, message: "Application not found" });
+      assessment.application = application._id;
+      assessment.applicant = application.applicant;
+      assessment.pet = application.pet;
+    }
     if (req.body.scores) assessment.scores = { ...assessment.scores.toObject(), ...req.body.scores };
     if (req.body.notes !== undefined) assessment.notes = req.body.notes;
-    if (req.body.redFlags) assessment.redFlags = req.body.redFlags;
-    if (req.body.recommendation) assessment.recommendation = req.body.recommendation;
+    if (req.body.redFlags !== undefined) assessment.redFlags = req.body.redFlags;
+    if (req.body.recommendation !== undefined) assessment.recommendation = req.body.recommendation;
 
     await assessment.save(); // re-runs the scoring pre-save hook
+
     return res.json({ success: true, data: assessment });
   } catch (err) {
     next(err);

@@ -1,4 +1,5 @@
 const HomeVisit = require("../models/HomeVisit");
+const Application = require("../models/Application");
 const { notify } = require("../utils/notificationHelper");
 
 async function myHomeVisits(req, res, next) {
@@ -12,7 +13,15 @@ async function myHomeVisits(req, res, next) {
 
 async function create(req, res, next) {
   try {
-    const visit = await HomeVisit.create(req.body);
+    const application = await Application.findById(req.body.application).select("applicant pet status type");
+    if (!application) return res.status(404).json({ success: false, message: "Application not found" });
+    if (application.status === "rejected") return res.status(409).json({ success: false, message: "Cannot schedule a home visit for a rejected application" });
+
+    const visit = await HomeVisit.create({
+      ...req.body,
+      applicant: application.applicant,
+      pet: application.pet,
+    });
     await notify({
       recipient: visit.applicant,
       type: "HOME_VISIT_SCHEDULED",
@@ -48,8 +57,22 @@ async function getOne(req, res, next) {
 
 async function update(req, res, next) {
   try {
-    const visit = await HomeVisit.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!visit) return res.status(404).json({ success: false, message: "Home visit not found" });
+    const existing = await HomeVisit.findById(req.params.id);
+    if (!existing) return res.status(404).json({ success: false, message: "Home visit not found" });
+
+    const updates = { ...req.body };
+    if (updates.application) {
+      const application = await Application.findById(updates.application).select("applicant pet status");
+      if (!application) return res.status(404).json({ success: false, message: "Application not found" });
+      if (application.status === "rejected") return res.status(409).json({ success: false, message: "Cannot assign a home visit to a rejected application" });
+      updates.applicant = application.applicant;
+      updates.pet = application.pet;
+    } else {
+      updates.applicant = existing.applicant;
+      updates.pet = existing.pet;
+    }
+
+    const visit = await HomeVisit.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
     await notify({
       recipient: visit.applicant,
       type: "HOME_VISIT_RESCHEDULED",

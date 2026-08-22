@@ -26,6 +26,7 @@ import Inventory from "./pages/Inventory";
 // Adoption pipeline
 import Adoptions from "./pages/Adoptions";
 import AdoptionForm from "./pages/AdoptionForm";
+import ApplicationDetails from "./pages/ApplicationDetails";
 import AdoptionScheduling from "./pages/AdoptionScheduling";
 import Adopters from "./pages/Adopters";
 import Interviews from "./pages/Interviews";
@@ -99,6 +100,7 @@ export default function App() {
           {/* Adoption pipeline */}
           <Route path="/adoptions" element={<Protected><Adoptions /></Protected>} />
           <Route path="/adoptions/new" element={<Protected><AdoptionForm /></Protected>} />
+          <Route path="/adoptions/:id" element={<Protected><ApplicationDetails /></Protected>} />
           <Route path="/adoptions/scheduling" element={<Protected><AdoptionScheduling /></Protected>} />
           <Route path="/adopters" element={<Protected><Adopters /></Protected>} />
           <Route path="/interviews" element={<Protected><Interviews /></Protected>} />

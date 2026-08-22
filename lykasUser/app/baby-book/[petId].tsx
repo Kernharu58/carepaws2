@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, FlatList, Pressable, Modal } from "react-native";
+import { View, Text, FlatList, Pressable, Modal, Alert } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -25,11 +25,13 @@ export default function BabyBookScreen() {
   const [entries, setEntries] = useState<BabyBookEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
+  const [formVisible, setFormVisible] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [category, setCategory] = useState("General");
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     if (!petId) return;
@@ -49,21 +51,67 @@ export default function BabyBookScreen() {
     load();
   }, [load]);
 
-  async function handleAdd() {
+  function openAdd() {
+    setEditingId(null);
+    setTitle("");
+    setContent("");
+    setCategory("General");
+    setFormVisible(true);
+  }
+
+  function openEdit(entry: BabyBookEntry) {
+    setEditingId(entry._id);
+    setTitle(entry.title);
+    setContent(entry.content ?? "");
+    setCategory(entry.category);
+    setFormVisible(true);
+  }
+
+  function closeForm() {
+    setFormVisible(false);
+    setEditingId(null);
+  }
+
+  async function handleSave() {
     if (!title) return;
     setSaving(true);
     try {
-      await api.post("/api/baby-book", { pet: petId, title, content, category });
-      setAdding(false);
-      setTitle("");
-      setContent("");
-      setCategory("General");
+      if (editingId) {
+        await api.put(`/api/baby-book/entry/${editingId}`, { title, content, category });
+      } else {
+        await api.post("/api/baby-book", { pet: petId, title, content, category });
+      }
+      closeForm();
       load();
     } catch (err) {
       setError(getApiErrorMessage(err, "Failed to save entry"));
     } finally {
       setSaving(false);
     }
+  }
+
+  function confirmDelete() {
+    if (!editingId) return;
+    const id = editingId;
+    Alert.alert("Delete this entry?", "This can't be undone.", [
+      { text: "Keep it", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          setDeleting(true);
+          try {
+            await api.delete(`/api/baby-book/entry/${id}`);
+            closeForm();
+            load();
+          } catch (err) {
+            Alert.alert("Couldn't delete", getApiErrorMessage(err));
+          } finally {
+            setDeleting(false);
+          }
+        },
+      },
+    ]);
   }
 
   return (
@@ -75,7 +123,7 @@ export default function BabyBookScreen() {
           </Pressable>
           <Text className="font-display text-xl text-ink">Baby book</Text>
         </View>
-        <Pressable onPress={() => setAdding(true)} accessibilityRole="button" accessibilityLabel="Add entry">
+        <Pressable onPress={openAdd} accessibilityRole="button" accessibilityLabel="Add entry">
           <Ionicons name="add-circle" size={26} color={colors.primary} />
         </Pressable>
       </View>
@@ -92,7 +140,12 @@ export default function BabyBookScreen() {
           keyExtractor={(e) => e._id}
           contentContainerClassName="px-5 pb-8 gap-3"
           renderItem={({ item }) => (
-            <View className="rounded-2xl border border-border bg-white p-4">
+            <Pressable
+              onPress={() => openEdit(item)}
+              accessibilityRole="button"
+              accessibilityLabel={`Edit entry: ${item.title}`}
+              className="rounded-2xl border border-border bg-white p-4"
+            >
               <View className="mb-1 flex-row items-center justify-between">
                 <Text className="font-sans-medium text-base text-ink" numberOfLines={1}>
                   {item.title}
@@ -103,15 +156,28 @@ export default function BabyBookScreen() {
               </View>
               <Text className="mb-1 font-sans text-xs text-muted">{formatDate(item.date)}</Text>
               {item.content && <Text className="font-sans text-sm text-slate">{item.content}</Text>}
-            </View>
+            </Pressable>
           )}
         />
       )}
 
-      <Modal visible={adding} animationType="slide" transparent onRequestClose={() => setAdding(false)}>
+      <Modal visible={formVisible} animationType="slide" transparent onRequestClose={closeForm}>
         <View className="flex-1 justify-end bg-black/40">
           <View className="rounded-t-3xl bg-cream p-5">
-            <Text className="mb-4 font-display text-lg text-ink">New baby book entry</Text>
+            <View className="mb-4 flex-row items-center justify-between">
+              <Text className="font-display text-lg text-ink">{editingId ? "Edit entry" : "New baby book entry"}</Text>
+              {editingId && (
+                <Pressable
+                  onPress={confirmDelete}
+                  disabled={deleting}
+                  accessibilityRole="button"
+                  accessibilityLabel="Delete entry"
+                  className="p-1"
+                >
+                  <Ionicons name="trash-outline" size={20} color={colors.status.danger} />
+                </Pressable>
+              )}
+            </View>
             <FormInput label="Title" value={title} onChangeText={setTitle} />
             <FormInput
               label="Details"
@@ -133,8 +199,8 @@ export default function BabyBookScreen() {
               ))}
             </View>
             <View className="flex-row gap-3">
-              <PrimaryButton label="Cancel" variant="outline" onPress={() => setAdding(false)} className="flex-1" />
-              <PrimaryButton label="Save" onPress={handleAdd} loading={saving} className="flex-1" />
+              <PrimaryButton label="Cancel" variant="outline" onPress={closeForm} className="flex-1" />
+              <PrimaryButton label="Save" onPress={handleSave} loading={saving} className="flex-1" />
             </View>
           </View>
         </View>

@@ -62,6 +62,14 @@ async function createApplication(req, res, next) {
       return res.status(409).json({ success: false, message: "This pet is not currently available" });
     }
 
+    const activeApplication = await Application.findOne({
+      pet: pet._id,
+      status: { $in: ["pending", "approved"] },
+    }).select("_id applicant status");
+    if (activeApplication) {
+      return res.status(409).json({ success: false, message: "This pet already has an active adoption application" });
+    }
+
     const application = await Application.create({
       ...req.body,
       applicant: req.user._id,
@@ -73,6 +81,9 @@ async function createApplication(req, res, next) {
 
     return res.status(201).json({ success: true, data: application });
   } catch (err) {
+    if (err?.code === 11000 && err?.keyPattern?.pet) {
+      return res.status(409).json({ success: false, message: "This pet already has an active adoption application" });
+    }
     next(err);
   }
 }
@@ -84,15 +95,39 @@ async function updateStatus(req, res, next) {
     if (!application) return res.status(404).json({ success: false, message: "Application not found" });
 
     const previousValues = { status: application.status };
-    application.status = req.body.status;
+    const nextStatus = req.body.status;
+    if (application.status === "approved" && nextStatus !== "approved") {
+      return res.status(409).json({ success: false, message: "An approved application cannot be reopened or rejected" });
+    }
+    if (application.status === "rejected" && nextStatus !== "rejected") {
+      return res.status(409).json({ success: false, message: "A rejected application cannot be reopened" });
+    }
+    application.status = nextStatus;
     application.reviewedBy = req.user._id;
     application.reviewedAt = new Date();
+
+    // Keep the application pipeline and pet lifecycle synchronized. The
+    // status endpoint is the final decision point, so an approval/rejection
+    // must never leave the mobile application's stage indicator or the pet
+    // catalog in a contradictory state.
+    const nextStage = nextStatus === "approved" ? "approved" : nextStatus === "rejected" ? "rejected" : application.stage;
+    if (nextStage !== application.stage) {
+      application.stage = nextStage;
+      application.stageHistory.push({
+        stage: nextStage,
+        changedBy: req.user._id,
+        note: req.body.note || `Application ${nextStatus}`,
+      });
+    }
+
     await application.save();
 
-    if (req.body.status === "approved") {
-      await Pet.findByIdAndUpdate(application.pet, { status: "Adopted" });
-    } else if (req.body.status === "rejected") {
-      await Pet.findByIdAndUpdate(application.pet, { status: "Available" });
+    if (nextStatus === "approved") {
+      await Pet.findByIdAndUpdate(application.pet, { status: application.type === "foster" ? "Foster" : "Adopted", owner: application.applicant });
+    } else if (nextStatus === "rejected") {
+      await Pet.findByIdAndUpdate(application.pet, { status: "Available", owner: null });
+    } else if (nextStatus === "pending") {
+      await Pet.findByIdAndUpdate(application.pet, { status: "Pending", owner: null });
     }
 
     await writeAuditLog({
@@ -118,8 +153,28 @@ async function updateStage(req, res, next) {
     if (!application) return res.status(404).json({ success: false, message: "Application not found" });
 
     const previousStage = application.stage;
-    application.stage = req.body.stage;
-    application.stageHistory.push({ stage: req.body.stage, changedBy: req.user._id, note: req.body.note });
+    const nextStage = req.body.stage;
+    if (application.status === "rejected" && nextStage !== "rejected") {
+      return res.status(409).json({ success: false, message: "A rejected application cannot re-enter the adoption pipeline" });
+    }
+    if (application.status === "approved" && nextStage === "rejected") {
+      return res.status(409).json({ success: false, message: "An approved application cannot be rejected" });
+    }
+    application.stage = nextStage;
+
+    // Completing/approving the pipeline is also a business-state transition.
+    // Keep the application status and pet status synchronized with the stage.
+    if (nextStage === "approved" || nextStage === "adoption_scheduled" || nextStage === "completed") {
+      application.status = "approved";
+      await Pet.findByIdAndUpdate(application.pet, { status: application.type === "foster" ? "Foster" : "Adopted", owner: application.applicant });
+    } else if (nextStage === "rejected") {
+      application.status = "rejected";
+      await Pet.findByIdAndUpdate(application.pet, { status: "Available", owner: null });
+    }
+
+    if (previousStage !== nextStage) {
+      application.stageHistory.push({ stage: nextStage, changedBy: req.user._id, note: req.body.note });
+    }
     await application.save();
 
     await writeAuditLog({

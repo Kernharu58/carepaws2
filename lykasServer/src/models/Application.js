@@ -57,5 +57,11 @@ const applicationSchema = new mongoose.Schema(
 );
 
 applicationSchema.index({ pet: 1, applicant: 1, status: 1 });
+// Only one live application may control a pet at a time. Rejected applications
+// remain as history and therefore do not block a later application.
+applicationSchema.index(
+  { pet: 1 },
+  { unique: true, partialFilterExpression: { status: { $in: ["pending", "approved"] } } }
+);
 
 module.exports = mongoose.model("Application", applicationSchema);

@@ -1,4 +1,5 @@
 const Interview = require("../models/Interview");
+const Application = require("../models/Application");
 const { notify } = require("../utils/notificationHelper");
 
 async function myInterviews(req, res, next) {
@@ -12,7 +13,15 @@ async function myInterviews(req, res, next) {
 
 async function create(req, res, next) {
   try {
-    const interview = await Interview.create(req.body);
+    const application = await Application.findById(req.body.application).select("applicant pet status type");
+    if (!application) return res.status(404).json({ success: false, message: "Application not found" });
+    if (application.status === "rejected") return res.status(409).json({ success: false, message: "Cannot schedule an interview for a rejected application" });
+
+    const interview = await Interview.create({
+      ...req.body,
+      applicant: application.applicant,
+      pet: application.pet,
+    });
     await notify({
       recipient: interview.applicant,
       type: "INTERVIEW_SCHEDULED",
@@ -48,8 +57,22 @@ async function getOne(req, res, next) {
 
 async function update(req, res, next) {
   try {
-    const interview = await Interview.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!interview) return res.status(404).json({ success: false, message: "Interview not found" });
+    const existing = await Interview.findById(req.params.id);
+    if (!existing) return res.status(404).json({ success: false, message: "Interview not found" });
+
+    const updates = { ...req.body };
+    if (updates.application) {
+      const application = await Application.findById(updates.application).select("applicant pet status");
+      if (!application) return res.status(404).json({ success: false, message: "Application not found" });
+      if (application.status === "rejected") return res.status(409).json({ success: false, message: "Cannot assign an interview to a rejected application" });
+      updates.applicant = application.applicant;
+      updates.pet = application.pet;
+    } else {
+      updates.applicant = existing.applicant;
+      updates.pet = existing.pet;
+    }
+
+    const interview = await Interview.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
     await notify({
       recipient: interview.applicant,
       type: "INTERVIEW_RESCHEDULED",

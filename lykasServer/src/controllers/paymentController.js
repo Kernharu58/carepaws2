@@ -30,6 +30,7 @@ async function createCheckout(req, res, next) {
     // error rather than a silent stub if the secret key isn't configured,
     // so this fails loudly in dev instead of pretending to work.
     if (!process.env.PAYMONGO_SECRET_KEY) {
+      await Payment.findByIdAndDelete(payment._id);
       return res.status(503).json({ success: false, message: "Payment gateway is not configured (PAYMONGO_SECRET_KEY missing)" });
     }
 

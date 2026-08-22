@@ -31,12 +31,13 @@ async function registerAndLogin(email, role = "user") {
 }
 
 describe("Application pipeline: submit -> stage transitions -> approve/reject", () => {
-  let applicantToken, staffToken, pet;
+  let applicantToken, staffToken, applicantUserId, pet;
 
   beforeEach(async () => {
     const applicant = await registerAndLogin("applicant@example.com", "user");
     const staff = await registerAndLogin("staff@example.com", "staff");
     applicantToken = applicant.token;
+    applicantUserId = applicant.user.id;
     staffToken = staff.token;
 
     pet = await Pet.create({ name: "Bantay", species: "Dog", status: "Available" });
@@ -125,6 +126,60 @@ describe("Application pipeline: submit -> stage transitions -> approve/reject", 
 
     expect(rejectRes.status).toBe(200);
     expect((await Pet.findById(pet2._id)).status).toBe("Available");
+  });
+
+  it("approving an application sets Pet.owner to the applicant, and distinguishes foster from adoption", async () => {
+    const submitRes = await request(app)
+      .post("/api/applications")
+      .set("Authorization", `Bearer ${applicantToken}`)
+      .send({ pet: pet._id.toString(), phone: "0917000000", address: "123 Main St" });
+
+    await request(app)
+      .put(`/api/applications/${submitRes.body.data._id}/status`)
+      .set("Authorization", `Bearer ${staffToken}`)
+      .send({ status: "approved" });
+
+    const adoptedPet = await Pet.findById(pet._id);
+    expect(adoptedPet.status).toBe("Adopted");
+    expect(adoptedPet.owner?.toString()).toBe(applicantUserId);
+
+    // A foster application should mark the pet Foster (not Adopted) and still assign the owner.
+    const pet2 = await Pet.create({ name: "Ginger", species: "Cat", status: "Available" });
+    const fosterSubmit = await request(app)
+      .post("/api/applications")
+      .set("Authorization", `Bearer ${applicantToken}`)
+      .send({ pet: pet2._id.toString(), phone: "0917000000", address: "123 Main St", type: "foster" });
+
+    await request(app)
+      .put(`/api/applications/${fosterSubmit.body.data._id}/status`)
+      .set("Authorization", `Bearer ${staffToken}`)
+      .send({ status: "approved" });
+
+    const fosteredPet = await Pet.findById(pet2._id);
+    expect(fosteredPet.status).toBe("Foster");
+    expect(fosteredPet.owner?.toString()).toBe(applicantUserId);
+  });
+
+  it("does not allow an approved application to be reopened", async () => {
+    const submitRes = await request(app)
+      .post("/api/applications")
+      .set("Authorization", `Bearer ${applicantToken}`)
+      .send({ pet: pet._id.toString(), phone: "0917000000", address: "123 Main St" });
+
+    const appId = submitRes.body.data._id;
+    await request(app)
+      .put(`/api/applications/${appId}/status`)
+      .set("Authorization", `Bearer ${staffToken}`)
+      .send({ status: "approved" });
+
+    const reopen = await request(app)
+      .put(`/api/applications/${appId}/status`)
+      .set("Authorization", `Bearer ${staffToken}`)
+      .send({ status: "pending" });
+
+    expect(reopen.status).toBe(409);
+    expect((await Application.findById(appId)).status).toBe("approved");
+    expect((await Pet.findById(pet._id)).status).toBe("Adopted");
   });
 
   it("a non-owner, non-staff user cannot view someone else's application", async () => {

@@ -19,7 +19,7 @@ export default function Health() {
   const petId = searchParams.get("petId");
 
   const [summary, setSummary] = useState<MedicalSummary | null>(null);
-  const [babyBook, setBabyBook] = useState<{ _id: string; title: string; date: string; category: string }[]>([]);
+  const [babyBook, setBabyBook] = useState<{ _id: string; title: string; content?: string; date: string; category: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -125,9 +125,13 @@ export default function Health() {
                   <EmptyState title="No baby book entries yet" />
                 ) : (
                   babyBook.map((entry) => (
-                    <p key={entry._id} className="py-1 text-sm text-gray-600">
-                      {entry.title} <span className="text-xs text-gray-400">({entry.category})</span>
-                    </p>
+                    <div key={entry._id} className="py-1.5">
+                      <p className="text-sm text-gray-600">
+                        {new Date(entry.date).toLocaleDateString()} — {entry.title}{" "}
+                        <span className="text-xs text-gray-400">({entry.category})</span>
+                      </p>
+                      {entry.content && <p className="text-xs text-gray-400">{entry.content}</p>}
+                    </div>
                   ))
                 )}
               </Card>

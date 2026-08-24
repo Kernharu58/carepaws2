@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { View, Text, ScrollView, Pressable } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { api, getApiErrorMessage } from "../../utils/api";
@@ -46,9 +46,11 @@ export default function ApplicationDetailsScreen() {
     }
   }, [id]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   if (loading) return <StateView state="loading" />;
   if (error || !application) return <StateView state="error" message={error ?? "Application not found"} onRetry={load} />;
@@ -72,6 +74,16 @@ export default function ApplicationDetailsScreen() {
           </View>
           <Text className="font-sans text-xs text-muted">Submitted {formatDateTime(application.createdAt)}</Text>
         </View>
+
+        {application.status === "pending" && (
+          <Pressable
+            onPress={() => router.push({ pathname: "/documents", params: { applicationId: application._id } })}
+            className="mb-5 flex-row items-center justify-center gap-2 rounded-xl border border-border bg-white px-4 py-3"
+          >
+            <Ionicons name="cloud-upload-outline" size={18} color={colors.primary} />
+            <Text className="font-sans-medium text-sm text-primary">Upload application documents</Text>
+          </Pressable>
+        )}
 
         <Text className="mb-3 font-sans-medium text-sm text-ink">Pipeline progress</Text>
         <View className="mb-6">
@@ -99,6 +111,12 @@ export default function ApplicationDetailsScreen() {
             );
           })}
         </View>
+
+        {application.stage === "rejected" && (
+          <View className="mb-5 rounded-xl border border-status-danger/20 bg-status-dangerBg px-4 py-3">
+            <Text className="font-sans-medium text-sm text-status-danger">Application rejected</Text>
+          </View>
+        )}
 
         {application.stageHistory?.length > 0 && (
           <>

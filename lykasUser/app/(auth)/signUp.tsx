@@ -1,3 +1,4 @@
+// app/(auth)/signUp.tsx
 import { useState } from "react";
 import { View, Text, ScrollView, Pressable } from "react-native";
 import { Link, router } from "expo-router";
@@ -77,8 +78,8 @@ export default function SignUpScreen() {
 
         <FormInput label="Full name" value={displayName} onChangeText={setDisplayName} testID="signup-name" />
         <FormInput label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" testID="signup-email" />
-        <FormInput label="Password" value={password} onChangeText={setPassword} secureTextEntry testID="signup-password" />
-        <FormInput label="Confirm password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry testID="signup-confirm" />
+        <FormInput label="Password" value={password} onChangeText={setPassword} isPassword testID="signup-password" />
+        <FormInput label="Confirm password" value={confirmPassword} onChangeText={setConfirmPassword} isPassword testID="signup-confirm" />
 
         <PrimaryButton label="Create account" onPress={handleSignUp} loading={loading} className="mt-2" testID="signup-submit" />
 

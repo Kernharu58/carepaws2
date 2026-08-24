@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { PawPrint, FileText, HandHeart, DollarSign } from "lucide-react";
+import { PawPrint, FileText, HandHeart, DollarSign, Building2 } from "lucide-react";
 import { api, getApiErrorMessage } from "../services/api";
 import { PageHeader, StatCard, Card } from "../components/ui/SharedUI";
 import { LoadingState, ErrorState } from "../components/ui/StateDisplays";
@@ -9,6 +9,7 @@ interface DashboardData {
   pendingApplications: number;
   pendingVolunteers: number;
   revenueThisMonthCentavos: number;
+  shelterStats: { count: number; totalCapacity: number; totalOccupancy: number; availableCapacity: number; occupancyPercentage: number };
 }
 
 export default function Dashboard() {
@@ -50,7 +51,7 @@ export default function Dashboard() {
         <StatCard label="Total pets" value={totalPets} hint={`${availableCount} available`} />
         <StatCard label="Pending applications" value={data.pendingApplications} />
         <StatCard label="Pending volunteer applications" value={data.pendingVolunteers} />
-        <StatCard label="Revenue this month" value={revenue} />
+        <StatCard label="Shelter occupancy" value={`${data.shelterStats.totalOccupancy}/${data.shelterStats.totalCapacity}`} hint={`${data.shelterStats.occupancyPercentage}% · ${data.shelterStats.availableCapacity} spaces available`} />
       </div>
 
       <Card>
@@ -69,6 +70,17 @@ export default function Dashboard() {
               <span className="w-8 text-right text-sm font-medium text-gray-700">{s.count}</span>
             </div>
           ))}
+        </div>
+      </Card>
+
+      <Card className="mt-4">
+        <div className="flex items-center gap-3">
+          <Building2 className="h-5 w-5 text-primary" aria-hidden="true" />
+          <div>
+            <p className="text-sm text-gray-500">Shelter capacity</p>
+            <p className="text-lg font-semibold text-gray-900">{data.shelterStats.totalOccupancy} occupied of {data.shelterStats.totalCapacity}</p>
+            <p className="text-sm text-gray-500">{data.shelterStats.availableCapacity} available spaces across {data.shelterStats.count} shelters</p>
+          </div>
         </div>
       </Card>
 

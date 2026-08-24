@@ -8,6 +8,7 @@ import { useState } from "react";
 import Modal from "../components/ui/Modal";
 import Button from "../components/ui/Button";
 import TextArea from "../components/ui/TextArea";
+import { Select } from "../components/ui/FormUI";
 
 interface Feedback {
   _id: string;
@@ -25,6 +26,7 @@ export default function FeedbackReviews() {
   const [responding, setResponding] = useState<Feedback | null>(null);
   const [response, setResponse] = useState("");
   const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState("new");
 
   const columns: Column<Feedback>[] = [
     { key: "submittedBy", header: "From", accessor: (f) => f.submittedBy?.displayName },
@@ -76,7 +78,7 @@ export default function FeedbackReviews() {
                 if (!responding) return;
                 setSaving(true);
                 try {
-                  await api.put(`/api/feedback/${responding._id}`, { adminResponse: response, status: "responded" });
+                  await api.put(`/api/feedback/${responding._id}`, { adminResponse: response || undefined, status });
                   showToast("Response sent", "success");
                   setResponding(null);
                   setResponse("");
@@ -94,6 +96,10 @@ export default function FeedbackReviews() {
         }
       >
         <p className="mb-3 rounded-lg bg-gray-50 p-3 text-sm text-gray-600">{responding?.message}</p>
+        <label className="mb-2 block text-sm font-medium text-gray-700">Status</label>
+        <Select value={status} onChange={(e) => setStatus(e.target.value)} className="mb-3 w-full">
+          {['new', 'in_review', 'responded', 'resolved', 'archived'].map((value) => <option key={value} value={value}>{value.replace(/_/g, ' ')}</option>)}
+        </Select>
         <TextArea rows={4} placeholder="Your response…" value={response} onChange={(e) => setResponse(e.target.value)} />
       </Modal>
     </div>

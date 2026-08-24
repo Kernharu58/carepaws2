@@ -6,6 +6,7 @@ const emergencyReportSchema = new mongoose.Schema(
     type: { type: String, enum: ["stray_animal", "injured_animal", "abuse_report", "abandoned_animal", "other"], required: true },
     animalType: { type: String },
     description: { type: String, required: true },
+    photos: [{ type: String }],
     location: { type: String },
     coordinates: { lat: Number, lng: Number },
     contactName: { type: String },

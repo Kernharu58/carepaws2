@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { View, Text, ScrollView, Pressable, Alert } from "react-native";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -10,13 +10,48 @@ import colors from "../utils/colors";
 
 const AVAILABILITY_OPTIONS = ["Weekday mornings", "Weekday afternoons", "Weekends", "Flexible"];
 
+interface VolunteerProfile {
+  phone?: string;
+  address?: string;
+  motivation?: string;
+  availability?: string[];
+  skills?: string[];
+  status?: string;
+}
+
 export default function VolunteerPortalScreen() {
+  const [profile, setProfile] = useState<VolunteerProfile | null>(null);
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [motivation, setMotivation] = useState("");
+  const [skills, setSkills] = useState("");
   const [availability, setAvailability] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  const loadProfile = useCallback(async () => {
+    setLoadingProfile(true);
+    try {
+      const res = await api.get("/api/volunteers/me");
+      const data: VolunteerProfile = res.data.data;
+      setProfile(data);
+      setPhone(data.phone || "");
+      setAddress(data.address || "");
+      setMotivation(data.motivation || "");
+      setSkills((data.skills || []).join(", "));
+      setAvailability(data.availability || []);
+    } catch (err: any) {
+      // A 404 simply means the user has not registered yet.
+      if (err?.response?.status !== 404) setError(getApiErrorMessage(err, "Failed to load volunteer profile"));
+    } finally {
+      setLoadingProfile(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
 
   function toggleAvailability(opt: string) {
     setAvailability((prev) => (prev.includes(opt) ? prev.filter((a) => a !== opt) : [...prev, opt]));
@@ -29,13 +64,26 @@ export default function VolunteerPortalScreen() {
     }
     setError(null);
     setSubmitting(true);
+    const payload = {
+      phone,
+      address,
+      motivation,
+      availability,
+      skills: skills.split(",").map((skill) => skill.trim()).filter(Boolean),
+    };
+
     try {
-      await api.post("/api/volunteers/register", { phone, address, motivation, availability });
-      Alert.alert("Application submitted", "We'll review your application and get back to you.", [
-        { text: "OK", onPress: () => router.back() },
-      ]);
+      if (profile) {
+        const res = await api.put("/api/volunteers/me", payload);
+        setProfile(res.data.data);
+        Alert.alert("Profile updated", "Your volunteer details and availability have been saved.");
+      } else {
+        const res = await api.post("/api/volunteers/register", payload);
+        setProfile(res.data.data);
+        Alert.alert("Application submitted", "We'll review your application and get back to you.");
+      }
     } catch (err) {
-      setError(getApiErrorMessage(err, "Failed to submit your application"));
+      setError(getApiErrorMessage(err, profile ? "Failed to update your profile" : "Failed to submit your application"));
     } finally {
       setSubmitting(false);
     }
@@ -48,12 +96,18 @@ export default function VolunteerPortalScreen() {
           <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Go back" className="p-1">
             <Ionicons name="chevron-back" size={22} color={colors.ink} />
           </Pressable>
-          <Text className="font-display text-xl text-ink">Become a volunteer</Text>
+          <Text className="font-display text-xl text-ink">{profile ? "Volunteer profile" : "Become a volunteer"}</Text>
         </View>
 
         {error && (
           <View className="mb-4 rounded-xl border border-status-danger/20 bg-status-dangerBg px-4 py-3">
             <Text className="font-sans text-sm text-status-danger">{error}</Text>
+          </View>
+        )}
+
+        {profile?.status && (
+          <View className="mb-4 rounded-xl border border-border bg-white px-4 py-3">
+            <Text className="font-sans-medium text-sm text-ink">Application status: {profile.status}</Text>
           </View>
         )}
 
@@ -66,6 +120,12 @@ export default function VolunteerPortalScreen() {
           multiline
           numberOfLines={4}
           style={{ minHeight: 96, textAlignVertical: "top" }}
+        />
+        <FormInput
+          label="Skills"
+          value={skills}
+          onChangeText={setSkills}
+          placeholder="e.g. animal care, photography, event setup"
         />
 
         <Text className="mb-2 font-sans-medium text-sm text-ink">When are you available?</Text>
@@ -86,7 +146,13 @@ export default function VolunteerPortalScreen() {
           ))}
         </View>
 
-        <PrimaryButton label="Submit application" onPress={handleSubmit} loading={submitting} className="mt-2" />
+        <PrimaryButton
+          label={loadingProfile ? "Loading…" : profile ? "Save profile" : "Submit application"}
+          onPress={handleSubmit}
+          loading={submitting || loadingProfile}
+          disabled={loadingProfile}
+          className="mt-2"
+        />
       </ScrollView>
     </SafeAreaView>
   );

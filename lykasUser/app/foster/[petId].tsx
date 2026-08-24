@@ -12,8 +12,10 @@ import colors from "../../utils/colors";
 interface WeeklyReport {
   _id: string;
   weekNumber: number;
-  reportDate: string;
-  overallProgress: string;
+  reportDate: string | null;
+  dueDate: string | null;
+  status: "missing" | "overdue" | "submitted";
+  overallProgress?: string;
   reviewedBy?: string;
 }
 
@@ -62,7 +64,7 @@ export default function FosterDetailScreen() {
         <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Go back" className="p-1">
           <Ionicons name="chevron-back" size={22} color={colors.ink} />
         </Pressable>
-        <Text className="font-display text-xl text-ink">{foster.pet.name}'s foster progress</Text>
+        <Text className="font-display text-xl text-ink">{foster.pet.name}&apos;s foster progress</Text>
       </View>
 
       <ScrollView contentContainerClassName="px-5 pb-8">
@@ -73,7 +75,7 @@ export default function FosterDetailScreen() {
 
         <View className="mb-6 flex-row items-center justify-between">
           <Text className="font-sans-medium text-sm text-ink">Weekly reports</Text>
-          <Pressable onPress={() => router.push("/monitoring-report")} accessibilityRole="button">
+          <Pressable onPress={() => router.push({ pathname: "/foster/report", params: { fosterId: foster._id, petName: foster.pet.name } })} accessibilityRole="button">
             <Text className="font-sans-medium text-sm text-primary">Submit new</Text>
           </Pressable>
         </View>
@@ -85,9 +87,22 @@ export default function FosterDetailScreen() {
             <View key={r._id} className="mb-2 flex-row items-center justify-between rounded-xl border border-border bg-white px-4 py-3">
               <View>
                 <Text className="font-sans-medium text-sm text-ink">Week {r.weekNumber}</Text>
-                <Text className="font-sans text-xs text-muted">{formatDate(r.reportDate)}</Text>
+                <Text className="font-sans text-xs text-muted">
+                  {r.status === "submitted"
+                    ? formatDate(r.reportDate)
+                    : `Due ${formatDate(r.dueDate)}`}
+                </Text>
               </View>
-              <StatusBadge status={r.overallProgress} tone={r.overallProgress === "Needs Attention" ? "danger" : "success"} />
+              <StatusBadge
+                status={r.status === "submitted" ? r.overallProgress || "Submitted" : r.status}
+                tone={
+                  r.status === "overdue" || r.overallProgress === "Needs Attention"
+                    ? "danger"
+                    : r.status === "missing"
+                      ? "warning"
+                      : "success"
+                }
+              />
             </View>
           ))
         )}

@@ -84,6 +84,12 @@ export default function ApplicationDetails() {
 
   async function changeStage(stage: ApplicationStage) {
     if (!application || saving || stage === application.stage) return;
+    const currentIndex = STAGES.indexOf(application.stage);
+    const targetIndex = STAGES.indexOf(stage);
+    if (targetIndex !== currentIndex + 1) {
+      showToast("Applications must progress through each required stage in order.", "error");
+      return;
+    }
     setSaving(true);
     try {
       const res = await api.put(`/api/applications/${application._id}/stage`, { stage });
@@ -175,7 +181,11 @@ export default function ApplicationDetails() {
                   key={stage}
                   type="button"
                   variant={application.stage === stage ? "primary" : "secondary"}
-                  disabled={saving}
+                  disabled={
+                    saving ||
+                    application.status === "rejected" ||
+                    (stage !== application.stage && STAGES.indexOf(stage) !== STAGES.indexOf(application.stage) + 1)
+                  }
                   onClick={() => changeStage(stage)}
                   className="justify-start"
                 >
@@ -210,7 +220,7 @@ export default function ApplicationDetails() {
             <div className="grid grid-cols-2 gap-2">
               <Button
                 type="button"
-                disabled={saving || application.status === "approved"}
+                disabled={saving || application.status !== "pending" || application.stage !== "risk_assessment"}
                 onClick={() => changeStatus("approved")}
               >
                 <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Approve
@@ -218,14 +228,14 @@ export default function ApplicationDetails() {
               <Button
                 type="button"
                 variant="danger"
-                disabled={saving || application.status === "rejected"}
+                disabled={saving || application.status !== "pending" || application.stage !== "risk_assessment"}
                 onClick={() => changeStatus("rejected")}
               >
                 <XCircle className="h-4 w-4" aria-hidden="true" /> Reject
               </Button>
             </div>
             <p className="mt-2 text-xs text-gray-400">
-              Approval updates the application to approved and the pet to Adopted; rejection returns the pet to Available.
+              Final decisions are available after risk assessment. Approval updates the application and pet; rejection returns the pet to Available.
             </p>
           </Card>
 

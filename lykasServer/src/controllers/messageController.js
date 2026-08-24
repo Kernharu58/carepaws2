@@ -23,7 +23,7 @@ async function listChatSessions(req, res, next) {
   try {
     const sessions = await Message.aggregate([
       { $sort: { createdAt: -1 } },
-      { $group: { _id: "$userId", lastMessage: { $first: "$$ROOT" } } },
+      { $group: { _id: "$userId", lastMessage: { $first: "$$ROOT" }, unreadCount: { $sum: { $cond: [{ $and: [{ $eq: ["$isRead", false] }, { $eq: ["$sender", "user"] }] }, 1, 0] } } } },
       { $sort: { "lastMessage.createdAt": -1 } },
     ]);
 
@@ -34,6 +34,7 @@ async function listChatSessions(req, res, next) {
     const data = sessions.map((s) => ({
       user: userMap.get(s._id.toString()) || null,
       lastMessage: s.lastMessage,
+      unreadCount: s.unreadCount || 0,
     }));
 
     return res.json({ success: true, data });
@@ -42,4 +43,23 @@ async function listChatSessions(req, res, next) {
   }
 }
 
-module.exports = { getMessageHistory, listChatSessions };
+async function markConversationRead(req, res, next) {
+  try {
+    const isStaff = ["staff", "admin", "super_admin"].includes(req.user.role);
+    const isOwner = req.user._id.toString() === req.params.userId;
+    if (!isStaff && !isOwner) {
+      return res.status(403).json({ success: false, message: "Not authorized to update this conversation" });
+    }
+
+    const senderToMark = isStaff ? "user" : { $in: ["admin", "shelter"] };
+    await Message.updateMany(
+      { userId: req.params.userId, sender: senderToMark, isRead: false },
+      { $set: { isRead: true, readAt: new Date() } }
+    );
+    return res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { getMessageHistory, listChatSessions, markConversationRead };

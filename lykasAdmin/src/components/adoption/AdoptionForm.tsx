@@ -7,6 +7,7 @@ import Alert from "../ui/Alert";
 
 export interface AdoptionFormValues {
   pet: string;
+  applicant: string;
   phone: string;
   address: string;
   experience: string;
@@ -19,6 +20,7 @@ export interface AdoptionFormValues {
 
 const EMPTY_VALUES: AdoptionFormValues = {
   pet: "",
+  applicant: "",
   phone: "",
   address: "",
   experience: "",
@@ -34,6 +36,12 @@ interface PetOption {
   name: string;
   species: string;
   status: string;
+}
+
+interface ApplicantOption {
+  _id: string;
+  displayName: string;
+  email: string;
 }
 
 interface AdoptionFormProps {
@@ -55,6 +63,8 @@ export default function AdoptionForm({ initialValues, onSubmit, submitting, subm
   const [values, setValues] = useState<AdoptionFormValues>({ ...EMPTY_VALUES, ...initialValues });
   const [pets, setPets] = useState<PetOption[]>([]);
   const [petsLoading, setPetsLoading] = useState(true);
+  const [applicants, setApplicants] = useState<ApplicantOption[]>([]);
+  const [applicantsLoading, setApplicantsLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,6 +75,21 @@ export default function AdoptionForm({ initialValues, onSubmit, submitting, subm
       })
       .finally(() => {
         if (!cancelled) setPetsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get("/api/auth/users", { params: { role: "user", limit: 100, sortBy: "displayName", sortOrder: "asc" } })
+      .then((res) => {
+        if (!cancelled) setApplicants(res.data.data);
+      })
+      .finally(() => {
+        if (!cancelled) setApplicantsLoading(false);
       });
     return () => {
       cancelled = true;
@@ -87,6 +112,23 @@ export default function AdoptionForm({ initialValues, onSubmit, submitting, subm
           <Alert tone="danger">{submitError}</Alert>
         </div>
       )}
+
+      <FormField label="Applicant" htmlFor="af-applicant">
+        <Select
+          id="af-applicant"
+          required
+          value={values.applicant}
+          onChange={(e) => set("applicant", e.target.value)}
+          disabled={applicantsLoading}
+        >
+          <option value="">{applicantsLoading ? "Loading applicants…" : "Select the applicant"}</option>
+          {applicants.map((user) => (
+            <option key={user._id} value={user._id}>
+              {user.displayName} ({user.email})
+            </option>
+          ))}
+        </Select>
+      </FormField>
 
       <FormField label="Pet" htmlFor="af-pet">
         <Select id="af-pet" required value={values.pet} onChange={(e) => set("pet", e.target.value)} disabled={petsLoading}>

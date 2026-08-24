@@ -47,6 +47,7 @@ const behavioralObservationSchema = new mongoose.Schema(
 const cageAssignmentSchema = new mongoose.Schema(
   {
     pet: { type: mongoose.Schema.Types.ObjectId, ref: "Pet", required: true, index: true },
+    cageId: { type: mongoose.Schema.Types.ObjectId, ref: "Cage", default: null, index: true },
     cageNumber: { type: String, required: true },
     section: { type: String },
     assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
@@ -57,6 +58,8 @@ const cageAssignmentSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+cageAssignmentSchema.index({ pet: 1 }, { unique: true, partialFilterExpression: { isActive: true } });
 
 const quarantinePeriodSchema = new mongoose.Schema(
   {

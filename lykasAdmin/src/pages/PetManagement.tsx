@@ -45,6 +45,8 @@ export default function PetManagement() {
   const [detailError, setDetailError] = useState<string | null>(null);
 
   const [status, setStatus] = useState("Available");
+  const [shelterId, setShelterId] = useState("");
+  const [shelters, setShelters] = useState<{ _id: string; name: string; status: string; capacity: number; currentOccupancy: number }[]>([]);
   const [healthStatus, setHealthStatus] = useState("");
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
@@ -63,6 +65,7 @@ export default function PetManagement() {
       const pet: Pet = petRes.data.data;
       setSelectedPet(pet);
       setStatus(pet.status);
+      setShelterId(pet.shelterId ?? "");
       setHealthStatus(pet.healthStatus ?? "");
       setDescription(pet.description ?? "");
       setCareSummary(careRes.data.data);
@@ -72,6 +75,10 @@ export default function PetManagement() {
     } finally {
       setDetailLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    api.get("/api/shelters").then((res) => setShelters(res.data.data ?? [])).catch(() => setShelters([]));
   }, []);
 
   useEffect(() => {
@@ -90,9 +97,12 @@ export default function PetManagement() {
     try {
       const formData = new FormData();
       formData.append("status", status);
+      formData.append("shelterId", shelterId);
       formData.append("healthStatus", healthStatus);
       formData.append("description", description);
-      await api.put(`/api/pets/${selectedPet._id}`, formData, { headers: { "Content-Type": "multipart/form-data" } });
+      // Don't set Content-Type manually — axios needs to compute it
+      // (including the multipart boundary) from the FormData instance.
+      await api.put(`/api/pets/${selectedPet._id}`, formData);
       showToast("Pet profile updated", "success");
       loadDetail(selectedPet._id);
       pets.reload();
@@ -188,6 +198,17 @@ export default function PetManagement() {
                       <option value="Foster">Foster</option>
                     </Select>
                   </FormField>
+                  <FormField label="Shelter" htmlFor="pm-shelter">
+                    <Select id="pm-shelter" value={shelterId} onChange={(e) => setShelterId(e.target.value)}>
+                      <option value="">No shelter assigned</option>
+                      {shelters.map((shelter) => (
+                        <option key={shelter._id} value={shelter._id} disabled={shelter.status === "inactive" || shelter.status === "under_maintenance" || (shelter.currentOccupancy >= shelter.capacity && shelter._id !== selectedPet.shelterId)}>
+                          {shelter.name} ({shelter.currentOccupancy}/{shelter.capacity})
+                        </option>
+                      ))}
+                    </Select>
+                  </FormField>
+
                   <FormField label="Health status" htmlFor="pm-health">
                     <Input id="pm-health" value={healthStatus} onChange={(e) => setHealthStatus(e.target.value)} />
                   </FormField>
@@ -217,6 +238,12 @@ export default function PetManagement() {
                     </p>
                   ) : (
                     <p className="text-sm text-gray-400">No health checks logged yet.</p>
+                  )}
+                  {careSummary?.latestFeeding && (
+                    <p className="mt-1 text-sm text-gray-600">
+                      Last feeding: <span className="font-medium">{careSummary.latestFeeding.meal}</span> — ate{" "}
+                      {careSummary.latestFeeding.eaten}
+                    </p>
                   )}
                   {careSummary?.activeCage && (
                     <p className="mt-1 text-sm text-gray-600">

@@ -26,4 +26,6 @@ const volunteerSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+volunteerSchema.index({ user: 1 }, { unique: true, partialFilterExpression: { isDeleted: false } });
+
 module.exports = mongoose.model("Volunteer", volunteerSchema);

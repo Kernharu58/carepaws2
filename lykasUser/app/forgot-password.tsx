@@ -42,7 +42,7 @@ export default function ForgotPasswordScreen() {
         ) : (
           <>
             <Text className="mb-2 font-display text-xl text-ink">Reset your password</Text>
-            <Text className="mb-6 font-sans text-sm text-muted">We'll email you a link to reset it.</Text>
+            <Text className="mb-6 font-sans text-sm text-muted">We&apos;ll email you a link to reset it.</Text>
             {error && (
               <View className="mb-4 rounded-xl border border-status-danger/20 bg-status-dangerBg px-4 py-3">
                 <Text className="font-sans text-sm text-status-danger">{error}</Text>

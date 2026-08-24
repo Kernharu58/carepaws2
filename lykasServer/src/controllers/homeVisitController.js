@@ -1,6 +1,7 @@
 const HomeVisit = require("../models/HomeVisit");
 const Application = require("../models/Application");
-const { notify } = require("../utils/notificationHelper");
+const { advanceApplicationStage } = require("./applicationController");
+const { notifyOnce } = require("../utils/notificationHelper");
 
 async function myHomeVisits(req, res, next) {
   try {
@@ -16,19 +17,23 @@ async function create(req, res, next) {
     const application = await Application.findById(req.body.application).select("applicant pet status type");
     if (!application) return res.status(404).json({ success: false, message: "Application not found" });
     if (application.status === "rejected") return res.status(409).json({ success: false, message: "Cannot schedule a home visit for a rejected application" });
+    if (application.stage !== "home_visit") {
+      return res.status(409).json({ success: false, message: "Application must be at the home visit stage before a visit can be scheduled" });
+    }
 
     const visit = await HomeVisit.create({
       ...req.body,
       applicant: application.applicant,
       pet: application.pet,
     });
-    await notify({
+    await notifyOnce({
       recipient: visit.applicant,
       type: "HOME_VISIT_SCHEDULED",
       title: "Home visit scheduled",
       message: `Your home visit is scheduled for ${new Date(visit.scheduledDate).toLocaleString()}.`,
       refModel: "HomeVisit",
       refId: visit._id,
+      dedupeKey: `home-visit-rescheduled:${visit._id}:${visit.scheduledDate?.getTime() || Date.now()}`,
     });
     return res.status(201).json({ success: true, data: visit });
   } catch (err) {
@@ -73,7 +78,7 @@ async function update(req, res, next) {
     }
 
     const visit = await HomeVisit.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
-    await notify({
+    await notifyOnce({
       recipient: visit.applicant,
       type: "HOME_VISIT_RESCHEDULED",
       title: "Home visit rescheduled",
@@ -92,6 +97,12 @@ async function complete(req, res, next) {
     const visit = await HomeVisit.findById(req.params.id);
     if (!visit) return res.status(404).json({ success: false, message: "Home visit not found" });
 
+    const application = await Application.findById(visit.application);
+    if (!application) return res.status(404).json({ success: false, message: "Application not found" });
+    if (application.stage !== "home_visit") {
+      return res.status(409).json({ success: false, message: "Application is no longer at the home visit stage" });
+    }
+
     visit.status = "completed";
     visit.report = req.body.report;
     visit.result = req.body.result;
@@ -99,7 +110,11 @@ async function complete(req, res, next) {
     visit.completedAt = new Date();
     await visit.save();
 
-    await notify({
+    if (visit.result === "passed") {
+      await advanceApplicationStage(application, "risk_assessment", req.user._id, "Home visit passed");
+    }
+
+    await notifyOnce({
       recipient: visit.applicant,
       type: "HOME_VISIT_RESULT",
       title: "Home visit result available",
@@ -123,7 +138,7 @@ async function cancel(req, res, next) {
     visit.cancelReason = req.body.cancelReason;
     await visit.save();
 
-    await notify({
+    await notifyOnce({
       recipient: visit.applicant,
       type: "HOME_VISIT_CANCELLED",
       title: "Home visit cancelled",

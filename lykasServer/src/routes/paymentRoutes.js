@@ -16,8 +16,10 @@ router.post("/webhook", webhookLimiter, paymentController.webhook);
 router.post("/create-checkout", protect, validateRequest(createCheckoutSchema), paymentController.createCheckout);
 router.get("/my", protect, paymentController.myPayments);
 router.get("/my/:id", protect, paymentController.myPaymentDetail);
+router.post("/:id/cancel", protect, paymentController.cancel);
 router.get("/summary", protect, adminOnly, paymentController.summary);
 router.get("/", protect, adminOnly, paymentController.list);
+router.get("/:id/receipt", protect, paymentController.receipt);
 router.get("/:id", protect, adminOnly, paymentController.getOne);
 router.put("/:id/refund", protect, adminOnly, validateRequest(refundSchema), paymentController.refund);
 

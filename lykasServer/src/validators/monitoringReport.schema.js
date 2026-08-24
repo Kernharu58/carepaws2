@@ -2,10 +2,9 @@ const { z } = require("zod");
 
 const monitoringReportCreateSchema = z
   .object({
-    pet: z.string().min(1),
     application: z.string().optional(),
-    reportMonth: z.string().optional(),
-    petName: z.string().max(200).optional(),
+    monitoringPeriod: z.coerce.number().int().min(1).optional(),
+    pet: z.string().optional(),
     currentWeight: z.number().optional(),
     diet: z.string().max(500).optional(),
     exerciseRoutine: z.string().max(500).optional(),
@@ -21,7 +20,7 @@ const monitoringReportCreateSchema = z
 
 const monitoringReportReviewSchema = z
   .object({
-    status: z.enum(["pending", "reviewed", "flagged"]).optional(),
+    status: z.enum(["reviewed", "flagged"]).optional(),
     adminNotes: z.string().max(1000).optional(),
   })
   .strict();

@@ -1,5 +1,6 @@
 const RiskAssessment = require("../models/RiskAssessment");
 const Application = require("../models/Application");
+const { notifyOnce } = require("../utils/notificationHelper");
 
 // GET /api/risk-assessments/application/:applicationId
 async function byApplication(req, res, next) {
@@ -20,6 +21,9 @@ async function create(req, res, next) {
     const application = await Application.findById(req.body.application).select("applicant pet status type");
     if (!application) return res.status(404).json({ success: false, message: "Application not found" });
     if (application.status === "rejected") return res.status(409).json({ success: false, message: "Cannot assess a rejected application" });
+    if (application.stage !== "risk_assessment") {
+      return res.status(409).json({ success: false, message: "Application must reach the risk assessment stage before it can be assessed" });
+    }
 
     const existing = await RiskAssessment.findOne({ application: application._id });
     if (existing) return res.status(409).json({ success: false, message: "A risk assessment already exists for this application" });
@@ -29,6 +33,16 @@ async function create(req, res, next) {
       applicant: application.applicant,
       pet: application.pet,
       assessedBy: req.user._id,
+    });
+    await notifyOnce({
+      recipient: application.applicant,
+      sender: req.user._id,
+      type: "RISK_ASSESSMENT_COMPLETED",
+      title: "Risk assessment completed",
+      message: "Your application risk assessment has been completed by staff.",
+      refModel: "Application",
+      refId: application._id,
+      dedupeKey: `risk-assessment-completed:${application._id}`,
     });
     return res.status(201).json({ success: true, data: assessment });
   } catch (err) {

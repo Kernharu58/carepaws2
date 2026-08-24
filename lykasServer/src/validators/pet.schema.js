@@ -14,6 +14,7 @@ const petCreateSchema = z
     healthStatus: z.string().max(500).optional(),
     description: z.string().max(2000).optional(),
     status: z.enum(["Available", "Pending", "Adopted", "Foster"]).optional(),
+    shelterId: z.preprocess((value) => value === "" ? null : value, z.string().regex(/^[a-f\d]{24}$/i).nullable()).optional(),
   })
   .strict();
 

@@ -48,6 +48,8 @@ api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   return config;
 });
 
+const AUTH_FLOW_PATHS = ["/auth/login", "/auth/register", "/auth/google", "/auth/refresh"];
+
 let refreshInFlight: Promise<string | null> | null = null;
 let onSessionExpired: (() => void) | null = null;
 
@@ -76,7 +78,12 @@ api.interceptors.response.use(
   async (error: AxiosError<ApiErrorShape>) => {
     const original = error.config as InternalAxiosRequestConfig & { _retried?: boolean };
 
-    if (error.response?.status === 401 && original && !original._retried && !original.url?.includes("/auth/")) {
+    if (
+      error.response?.status === 401 &&
+      original &&
+      !original._retried &&
+      !AUTH_FLOW_PATHS.some((p) => original.url?.includes(p))
+    ) {
       original._retried = true;
 
       if (!refreshInFlight) {

@@ -1,9 +1,11 @@
 const ScheduledJobLog = require("../models/ScheduledJobLog");
-const { runVaccinationReminders, runDocumentExpiryReminders } = require("../jobs/reminderJobs");
+const { runVaccinationReminders, runDocumentExpiryReminders, runFosterReportMonitoring, runMonitoringReportMonitoring } = require("../jobs/reminderJobs");
 
 const JOBS = {
   vaccination_reminders: runVaccinationReminders,
   document_expiry_reminders: runDocumentExpiryReminders,
+  foster_report_monitoring: runFosterReportMonitoring,
+  monitoring_report_monitoring: runMonitoringReportMonitoring,
 };
 
 // GET /api/scheduled-jobs — list known job keys + their most recent run

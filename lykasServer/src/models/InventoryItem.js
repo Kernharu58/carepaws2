@@ -6,18 +6,21 @@ const movementSchema = new mongoose.Schema(
     quantity: { type: Number, required: true },
     note: { type: String },
     actor: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    sourceType: { type: String, enum: ["manual", "inkind_donation"], default: "manual" },
+    sourceId: { type: mongoose.Schema.Types.ObjectId, ref: "InKindDonation", default: null },
     createdAt: { type: Date, default: Date.now },
   },
-  { _id: false }
+  { _id: true }
 );
 
 const inventoryItemSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
+    normalizedName: { type: String, index: true, sparse: true },
     category: { type: String, enum: ["food", "medical", "bedding", "cleaning", "equipment", "office", "other"], required: true },
-    quantity: { type: Number, default: 0 },
+    quantity: { type: Number, default: 0, min: 0 },
     unit: { type: String },
-    minThreshold: { type: Number, default: 0 },
+    minThreshold: { type: Number, default: 0, min: 0 },
     location: { type: String },
     supplier: { type: String },
     notes: { type: String },
@@ -27,5 +30,10 @@ const inventoryItemSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+inventoryItemSchema.pre("validate", function (next) {
+  if (this.name) this.normalizedName = this.name.trim().toLowerCase();
+  next();
+});
 
 module.exports = mongoose.model("InventoryItem", inventoryItemSchema);

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, FlatList, Pressable } from "react-native";
+import { View, Text, FlatList, Pressable, RefreshControl } from "react-native";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -83,6 +83,7 @@ export default function NotificationsScreen() {
           data={notifications}
           keyExtractor={(n) => n._id}
           contentContainerClassName="px-5 pb-8 gap-2"
+          refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
           renderItem={({ item }) => (
             <Pressable
               onPress={() => markRead(item._id)}

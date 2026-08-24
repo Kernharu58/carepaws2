@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
+import { lazy, Suspense } from "react";
 import { Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { ToastProvider } from "./context/ToastContext";
 import ProtectedRoute from "./components/layout/ProtectedRoute";
 import AppLayout from "./components/layout/AppLayout";
+import { LoadingState } from "./components/ui/StateDisplays";
 
 // Auth
 import Login from "./pages/Login";
@@ -13,8 +15,11 @@ import VerifyEmail from "./pages/VerifyEmail";
 
 // Overview
 import Dashboard from "./pages/Dashboard";
-import Analytics from "./pages/Analytics";
-import Reports from "./pages/Reports";
+// Lazy-loaded: these are the two heaviest routes (charts/export libs), and
+// most sessions never visit them, so splitting them out of the main chunk
+// cuts the initial bundle instead of paying for them on every page load.
+const Analytics = lazy(() => import("./pages/Analytics"));
+const Reports = lazy(() => import("./pages/Reports"));
 
 // Pet operations
 import ManagePets from "./pages/ManagePets";
@@ -60,6 +65,7 @@ import Accounts from "./pages/Accounts";
 import StaffManagement from "./pages/StaffManagement";
 import UserVerification from "./pages/UserVerification";
 import ShelterManagement from "./pages/ShelterManagement";
+import CageManagement from "./pages/CageManagement";
 
 // System
 import AuditLogs from "./pages/AuditLogs";
@@ -87,8 +93,26 @@ export default function App() {
 
           {/* Overview */}
           <Route path="/" element={<Protected><Dashboard /></Protected>} />
-          <Route path="/analytics" element={<Protected><Analytics /></Protected>} />
-          <Route path="/reports" element={<Protected><Reports /></Protected>} />
+          <Route
+            path="/analytics"
+            element={
+              <Protected>
+                <Suspense fallback={<LoadingState label="Loading analytics…" />}>
+                  <Analytics />
+                </Suspense>
+              </Protected>
+            }
+          />
+          <Route
+            path="/reports"
+            element={
+              <Protected>
+                <Suspense fallback={<LoadingState label="Loading reports…" />}>
+                  <Reports />
+                </Suspense>
+              </Protected>
+            }
+          />
 
           {/* Pet operations */}
           <Route path="/pets" element={<Protected><ManagePets /></Protected>} />
@@ -134,6 +158,7 @@ export default function App() {
           <Route path="/staff" element={<Protected roles={["super_admin"]}><StaffManagement /></Protected>} />
           <Route path="/verification" element={<Protected roles={["admin", "super_admin"]}><UserVerification /></Protected>} />
           <Route path="/shelters" element={<Protected roles={["admin", "super_admin"]}><ShelterManagement /></Protected>} />
+          <Route path="/cages" element={<Protected roles={["admin", "super_admin"]}><CageManagement /></Protected>} />
 
           {/* System */}
           <Route path="/audit-logs" element={<Protected roles={["super_admin"]}><AuditLogs /></Protected>} />

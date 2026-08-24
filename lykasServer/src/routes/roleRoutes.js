@@ -3,6 +3,15 @@ const router = express.Router();
 const Role = require("../models/Role");
 const { protect, requireRole } = require("../middleware/authMiddleware");
 
+// NOTE: This CRUD API for Role documents (including the fine-grained
+// `permissions` array and the "*" wildcard) is live and reachable at
+// /api/roles, but it's gated by the coarse requireRole() below, not by
+// ../middleware/permissionMiddleware's requirePermission — nothing in the
+// codebase enforces the per-permission checks that Role.permissions imply.
+// There's also no admin-panel screen for staff to edit permissions through
+// this API yet. See the note atop permissionMiddleware.js before assuming
+// permissions set here actually restrict anything.
+
 router.get("/", protect, requireRole("admin", "super_admin"), async (req, res, next) => {
   try {
     const roles = await Role.find();

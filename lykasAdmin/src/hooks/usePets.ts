@@ -14,6 +14,7 @@ export interface Pet {
   energyLevel?: "Low" | "Medium" | "High";
   status: "Available" | "Pending" | "Adopted" | "Foster";
   imageUrl?: string | null;
+  shelterId?: string | null;
   healthStatus?: string;
   description?: string;
 }
@@ -34,7 +35,11 @@ export function usePets() {
       setMutating(true);
       setMutationError(null);
       try {
-        await api.post("/api/pets", formData, { headers: { "Content-Type": "multipart/form-data" } });
+        // Don't set Content-Type manually here — axios/the browser needs to
+        // compute it (including the multipart boundary) from the FormData
+        // instance itself. A hardcoded "multipart/form-data" header omits the
+        // boundary parameter, which makes the body unparsable server-side.
+        await api.post("/api/pets", formData);
         list.reload();
         return true;
       } catch (err) {
@@ -52,7 +57,8 @@ export function usePets() {
       setMutating(true);
       setMutationError(null);
       try {
-        await api.put(`/api/pets/${id}`, formData, { headers: { "Content-Type": "multipart/form-data" } });
+        // See createPet above — let axios set Content-Type (with boundary).
+        await api.put(`/api/pets/${id}`, formData);
         list.reload();
         return true;
       } catch (err) {

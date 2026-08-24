@@ -4,7 +4,7 @@ const fosterSchema = new mongoose.Schema(
   {
     pet: { type: mongoose.Schema.Types.ObjectId, ref: "Pet", required: true, index: true },
     fosterer: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
-    application: { type: mongoose.Schema.Types.ObjectId, ref: "Application" },
+    application: { type: mongoose.Schema.Types.ObjectId, ref: "Application", required: true, index: true },
     startDate: { type: Date, required: true },
     endDate: { type: Date, default: null },
     expectedEndDate: { type: Date },
@@ -25,13 +25,23 @@ const fosterSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+fosterSchema.index({ application: 1 }, { unique: true, partialFilterExpression: { application: { $exists: true } } });
+
 const weeklyFosterReportSchema = new mongoose.Schema(
   {
     foster: { type: mongoose.Schema.Types.ObjectId, ref: "Foster", required: true, index: true },
     pet: { type: mongoose.Schema.Types.ObjectId, ref: "Pet", required: true },
     fosterer: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     weekNumber: { type: Number, required: true },
-    reportDate: { type: Date, default: Date.now },
+    dueDate: { type: Date, default: null },
+    reportDate: { type: Date, default: null },
+    submittedAt: { type: Date, default: null },
+    status: {
+      type: String,
+      enum: ["missing", "overdue", "submitted"],
+      default: "submitted",
+      index: true,
+    },
     weightChange: { type: Number },
     appetite: { type: String, enum: ["Excellent", "Good", "Fair", "Poor"] },
     energy: { type: String, enum: ["Very Active", "Active", "Low", "Lethargic"] },
@@ -47,7 +57,30 @@ const weeklyFosterReportSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-module.exports = {
-  Foster: mongoose.model("Foster", fosterSchema),
-  WeeklyFosterReport: mongoose.model("WeeklyFosterReport", weeklyFosterReportSchema),
-};
+weeklyFosterReportSchema.index({ foster: 1, weekNumber: 1 }, { unique: true });
+
+const Foster = mongoose.model("Foster", fosterSchema);
+const WeeklyFosterReport = mongoose.model("WeeklyFosterReport", weeklyFosterReportSchema);
+
+/**
+ * A weekly report is due at the end of its week. The final report is due on
+ * the trial end date when the trial is not an exact multiple of seven days.
+ */
+function getFosterReportDueDate(foster, weekNumber) {
+  const startDate = new Date(foster.startDate);
+  const trialEnd = new Date(
+    foster.expectedEndDate ||
+      (startDate.getTime() + Number(foster.trialDurationDays || 0) * 24 * 60 * 60 * 1000)
+  );
+
+  const weekOffsetDays = Math.min(
+    Number(weekNumber) * 7,
+    Math.max(0, Number(foster.trialDurationDays || 0))
+  );
+  const dueDate = new Date(startDate);
+  dueDate.setDate(dueDate.getDate() + weekOffsetDays);
+
+  return dueDate > trialEnd ? trialEnd : dueDate;
+}
+
+module.exports = { Foster, WeeklyFosterReport, getFosterReportDueDate };

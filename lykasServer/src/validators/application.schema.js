@@ -3,6 +3,10 @@ const { z } = require("zod");
 const applicationCreateSchema = z
   .object({
     pet: z.string().min(1),
+    // Only honored when the requester is staff/admin recording an
+    // application on someone else's behalf (see applicationController.js);
+    // a self-service applicant's own id is always used otherwise.
+    applicant: z.string().min(1).optional(),
     phone: z.string().min(1),
     address: z.string().min(1),
     experience: z.string().optional(),

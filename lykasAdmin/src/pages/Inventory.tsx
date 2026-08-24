@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Pencil, Plus, PackagePlus } from "lucide-react";
+import { History, Pencil, Plus, PackagePlus } from "lucide-react";
 import { useResourceList } from "../hooks/useResourceList";
 import { api, getApiErrorMessage } from "../services/api";
 import { PageHeader } from "../components/ui/SharedUI";
@@ -9,6 +9,15 @@ import Modal from "../components/ui/Modal";
 import Alert from "../components/ui/Alert";
 import { FormField, Input, Select } from "../components/ui/FormUI";
 import { useToast } from "../context/ToastContext";
+
+interface InventoryMovement {
+  _id: string;
+  type: "restock" | "usage" | "adjustment";
+  quantity: number;
+  note?: string;
+  sourceType?: string;
+  createdAt: string;
+}
 
 interface InventoryItem {
   _id: string;
@@ -30,7 +39,10 @@ export default function Inventory() {
   const [adjusting, setAdjusting] = useState<InventoryItem | null>(null);
   const [editing, setEditing] = useState<InventoryItem | null>(null);
   const [creating, setCreating] = useState(false);
-  const [adjustType, setAdjustType] = useState<"restock" | "usage">("restock");
+  const [adjustType, setAdjustType] = useState<"restock" | "usage" | "adjustment">("restock");
+  const [historyItem, setHistoryItem] = useState<InventoryItem | null>(null);
+  const [movements, setMovements] = useState<InventoryMovement[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [adjustQty, setAdjustQty] = useState("");
   const [adjustNote, setAdjustNote] = useState("");
   const [name, setName] = useState("");
@@ -100,7 +112,7 @@ export default function Inventory() {
       const body = {
         name: name.trim(),
         category,
-        quantity: Number(quantity),
+        ...(editing ? {} : { quantity: Number(quantity) }),
         unit,
         minThreshold: Number(minThreshold),
         location: location || undefined,
@@ -124,11 +136,25 @@ export default function Inventory() {
     }
   }
 
+  async function openHistory(item: InventoryItem) {
+    setHistoryItem(item);
+    setHistoryLoading(true);
+    try {
+      const response = await api.get(`/api/inventory/${item._id}/movements`);
+      setMovements(response.data?.data ?? []);
+    } catch (err) {
+      showToast(getApiErrorMessage(err, "Failed to load inventory history"), "error");
+      setHistoryItem(null);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
   async function submitAdjustment() {
     if (!adjusting) return;
     const qty = Number(adjustQty);
-    if (!Number.isFinite(qty) || qty <= 0) {
-      setError("Enter a quantity greater than zero.");
+    if (!Number.isFinite(qty) || (adjustType !== "adjustment" && qty <= 0) || (adjustType === "adjustment" && qty === 0)) {
+      setError(adjustType === "adjustment" ? "Enter a non-zero adjustment." : "Enter a quantity greater than zero.");
       return;
     }
     setSaving(true);
@@ -180,6 +206,7 @@ export default function Inventory() {
         rowActions={(item) => (
           <div className="flex justify-end gap-1">
             <Button variant="ghost" onClick={() => openEdit(item)} aria-label={`Edit ${item.name}`}><Pencil className="h-3.5 w-3.5" /></Button>
+            <Button variant="ghost" onClick={() => openHistory(item)} aria-label={`View history for ${item.name}`}><History className="h-3.5 w-3.5" /></Button>
             <Button variant="secondary" onClick={() => { setAdjusting(item); setAdjustType("restock"); setError(null); }}>
               <PackagePlus className="h-3.5 w-3.5" aria-hidden="true" /> Adjust
             </Button>
@@ -235,12 +262,41 @@ export default function Inventory() {
       >
         {error && <div className="mb-4"><Alert tone="danger">{error}</Alert></div>}
         <FormField label="Type" htmlFor="adjust-type">
-          <Select id="adjust-type" value={adjustType} onChange={(e) => setAdjustType(e.target.value as "restock" | "usage")}>
-            <option value="restock">Restock (add)</option><option value="usage">Usage (remove)</option>
+          <Select id="adjust-type" value={adjustType} onChange={(e) => setAdjustType(e.target.value as "restock" | "usage" | "adjustment")}>
+            <option value="restock">Restock (add)</option><option value="usage">Usage (remove)</option><option value="adjustment">Adjustment (+/-)</option>
           </Select>
         </FormField>
-        <FormField label="Quantity" htmlFor="adjust-qty"><Input id="adjust-qty" type="number" min={1} value={adjustQty} onChange={(e) => setAdjustQty(e.target.value)} /></FormField>
+        <FormField label="Quantity" htmlFor="adjust-qty"><Input id="adjust-qty" type="number" min={adjustType === "adjustment" ? undefined : 1} value={adjustQty} onChange={(e) => setAdjustQty(e.target.value)} /></FormField>
+        {adjustType === "adjustment" && <p className="text-xs text-gray-500 -mt-2 mb-3">Use a positive number to add stock or a negative number to reduce it.</p>}
         <FormField label="Note" htmlFor="adjust-note"><Input id="adjust-note" value={adjustNote} onChange={(e) => setAdjustNote(e.target.value)} /></FormField>
+      </Modal>
+
+      <Modal
+        isOpen={!!historyItem}
+        onClose={() => setHistoryItem(null)}
+        title={`Transaction history — ${historyItem?.name ?? ""}`}
+        footer={<Button variant="secondary" onClick={() => setHistoryItem(null)}>Close</Button>}
+      >
+        {historyLoading ? (
+          <p className="text-sm text-gray-500">Loading history…</p>
+        ) : movements.length === 0 ? (
+          <p className="text-sm text-gray-500">No stock transactions recorded.</p>
+        ) : (
+          <div className="space-y-3">
+            {movements.map((movement) => (
+              <div key={movement._id} className="rounded-lg border border-gray-200 p-3 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium capitalize">{movement.type}</span>
+                  <span className={movement.type === "usage" || (movement.type === "adjustment" && movement.quantity < 0) ? "text-status-danger" : "text-status-success"}>
+                    {movement.type === "usage" ? "-" : movement.type === "adjustment" && movement.quantity > 0 ? "+" : ""}{movement.quantity} {historyItem?.unit ?? ""}
+                  </span>
+                </div>
+                <div className="mt-1 text-xs text-gray-500">{new Date(movement.createdAt).toLocaleString()} · {movement.sourceType === "inkind_donation" ? "In-kind donation" : "Manual"}</div>
+                {movement.note && <div className="mt-1 text-xs text-gray-600">{movement.note}</div>}
+              </div>
+            ))}
+          </div>
+        )}
       </Modal>
     </div>
   );

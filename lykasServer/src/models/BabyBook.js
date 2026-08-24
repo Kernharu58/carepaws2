@@ -8,6 +8,7 @@ const babyBookSchema = new mongoose.Schema(
     title: { type: String, required: true },
     content: { type: String },
     category: { type: String, enum: ["Milestone", "Health", "Funny Moment", "Training", "First Time", "General"], default: "General" },
+    photoUrl: { type: String, default: null },
   },
   { timestamps: true }
 );

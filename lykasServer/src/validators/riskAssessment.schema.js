@@ -5,8 +5,8 @@ const score = z.number().int().min(1).max(5);
 const riskAssessmentCreateSchema = z
   .object({
     application: z.string().min(1),
-    pet: z.string().min(1),
-    applicant: z.string().min(1),
+    pet: z.string().min(1).optional(),
+    applicant: z.string().min(1).optional(),
     scores: z
       .object({
         housingStability: score,

@@ -1,6 +1,18 @@
 const Role = require("../models/Role");
 
 /**
+ * NOTE: unused scaffolding. Nothing currently imports requirePermission —
+ * every route is gated by the coarser requireRole()/adminOnly instead, and
+ * there is no admin-panel screen for editing Role.permissions. This was
+ * built ahead of the feature that would wire it up. Deciding which
+ * permission maps to which route is a product/security decision that needs
+ * sign-off before this gets connected, and the Role Management UI to edit
+ * permissions is a separate scoped feature — don't assume this is enforced
+ * just because it exists, and don't wire it up piecemeal without that
+ * decision being made explicitly.
+ */
+
+/**
  * Fine-grained, admin-configurable permission check layered on top of the
  * coarse role enum. super_admin always short-circuits to allowed; every
  * other role is checked against its Role document's permissions array,

@@ -42,50 +42,154 @@ describe("Payment webhook", () => {
     payer = await User.create({ displayName: "Payer", email: "payer@example.com", password: "password123" });
   });
 
-  it("marks a pending payment as paid on a payment.paid event, unsigned (no PAYMONGO_WEBHOOK_SECRET configured)", async () => {
-    const payment = await Payment.create({
-      paidBy: payer._id,
-      type: "adoption_fee",
-      amount: 50000,
-      description: "Adoption fee",
-      status: "pending",
-    });
+  it("marks a pending payment as paid on a correctly signed payment.paid event", async () => {
+    const originalSecret = process.env.PAYMONGO_WEBHOOK_SECRET;
+    process.env.PAYMONGO_WEBHOOK_SECRET = "test_webhook_secret";
 
-    const res = await request(app)
-      .post("/api/payments/webhook")
-      .send(paymongoPayload({ referenceNumber: payment._id.toString() }));
+    try {
+      const payment = await Payment.create({
+        paidBy: payer._id,
+        type: "adoption_fee",
+        amount: 50000,
+        description: "Adoption fee",
+        status: "pending",
+      });
 
-    expect(res.status).toBe(200);
+      const payload = paymongoPayload({ referenceNumber: payment._id.toString() });
+      const signature = signPayload("test_webhook_secret", payload);
 
-    const updated = await Payment.findById(payment._id);
-    expect(updated.status).toBe("paid");
-    expect(updated.paidAt).toBeTruthy();
-    expect(updated.paymentMethod).toBe("gcash");
+      const res = await request(app)
+        .post("/api/payments/webhook")
+        .set("paymongo-signature", signature)
+        .send(payload);
+
+      expect(res.status).toBe(200);
+
+      const updated = await Payment.findById(payment._id);
+      expect(updated.status).toBe("paid");
+      expect(updated.paidAt).toBeTruthy();
+      expect(updated.paymentMethod).toBe("gcash");
+    } finally {
+      process.env.PAYMONGO_WEBHOOK_SECRET = originalSecret;
+    }
   });
 
-  it("marks a payment as failed on a payment.failed event", async () => {
-    const payment = await Payment.create({
-      paidBy: payer._id,
-      type: "donation",
-      amount: 10000,
-      description: "Donation",
-      status: "pending",
-    });
+  it("does not duplicate processing or notifications when the same signed webhook is delivered twice", async () => {
+    const originalSecret = process.env.PAYMONGO_WEBHOOK_SECRET;
+    process.env.PAYMONGO_WEBHOOK_SECRET = "test_webhook_secret";
 
-    const res = await request(app)
-      .post("/api/payments/webhook")
-      .send(paymongoPayload({ referenceNumber: payment._id.toString(), eventType: "payment.failed" }));
+    try {
+      const payment = await Payment.create({
+        paidBy: payer._id,
+        type: "donation",
+        amount: 15000,
+        description: "Donation",
+        status: "pending",
+      });
 
-    expect(res.status).toBe(200);
-    expect((await Payment.findById(payment._id)).status).toBe("failed");
+      const payload = paymongoPayload({ referenceNumber: payment._id.toString() });
+      const signature = signPayload("test_webhook_secret", payload);
+
+      const first = await request(app).post("/api/payments/webhook").set("paymongo-signature", signature).send(payload);
+      const second = await request(app).post("/api/payments/webhook").set("paymongo-signature", signature).send(payload);
+
+      expect(first.status).toBe(200);
+      expect(second.status).toBe(200);
+      const updated = await Payment.findById(payment._id);
+      expect(updated.status).toBe("paid");
+      expect(updated.webhookEventIds).toHaveLength(1);
+    } finally {
+      process.env.PAYMONGO_WEBHOOK_SECRET = originalSecret;
+    }
   });
 
-  it("ignores a webhook payload with no matching payment reference, without erroring", async () => {
-    const res = await request(app)
-      .post("/api/payments/webhook")
-      .send(paymongoPayload({ referenceNumber: "000000000000000000000000" }));
+  it("marks a payment as failed on a correctly signed payment.failed event", async () => {
+    const originalSecret = process.env.PAYMONGO_WEBHOOK_SECRET;
+    process.env.PAYMONGO_WEBHOOK_SECRET = "test_webhook_secret";
 
-    expect(res.status).toBe(200);
+    try {
+      const payment = await Payment.create({
+        paidBy: payer._id,
+        type: "donation",
+        amount: 10000,
+        description: "Donation",
+        status: "pending",
+      });
+
+      const payload = paymongoPayload({ referenceNumber: payment._id.toString(), eventType: "payment.failed" });
+      const signature = signPayload("test_webhook_secret", payload);
+
+      const res = await request(app).post("/api/payments/webhook").set("paymongo-signature", signature).send(payload);
+
+      expect(res.status).toBe(200);
+      expect((await Payment.findById(payment._id)).status).toBe("failed");
+    } finally {
+      process.env.PAYMONGO_WEBHOOK_SECRET = originalSecret;
+    }
+  });
+
+  it("ignores a signed webhook payload with no matching payment reference, without erroring", async () => {
+    const originalSecret = process.env.PAYMONGO_WEBHOOK_SECRET;
+    process.env.PAYMONGO_WEBHOOK_SECRET = "test_webhook_secret";
+
+    try {
+      const payload = paymongoPayload({ referenceNumber: "000000000000000000000000" });
+      const signature = signPayload("test_webhook_secret", payload);
+
+      const res = await request(app).post("/api/payments/webhook").set("paymongo-signature", signature).send(payload);
+
+      expect(res.status).toBe(200);
+    } finally {
+      process.env.PAYMONGO_WEBHOOK_SECRET = originalSecret;
+    }
+  });
+
+  it("rejects the webhook with 500 when PAYMONGO_WEBHOOK_SECRET is not configured", async () => {
+    const originalSecret = process.env.PAYMONGO_WEBHOOK_SECRET;
+    delete process.env.PAYMONGO_WEBHOOK_SECRET;
+
+    try {
+      const payment = await Payment.create({
+        paidBy: payer._id,
+        type: "adoption_fee",
+        amount: 50000,
+        description: "Adoption fee",
+        status: "pending",
+      });
+
+      const res = await request(app)
+        .post("/api/payments/webhook")
+        .send(paymongoPayload({ referenceNumber: payment._id.toString() }));
+
+      expect(res.status).toBe(500);
+      expect((await Payment.findById(payment._id)).status).toBe("pending"); // unchanged
+    } finally {
+      process.env.PAYMONGO_WEBHOOK_SECRET = originalSecret;
+    }
+  });
+
+  it("rejects the webhook with 401 when the signature header is missing but a secret is configured", async () => {
+    const originalSecret = process.env.PAYMONGO_WEBHOOK_SECRET;
+    process.env.PAYMONGO_WEBHOOK_SECRET = "test_webhook_secret";
+
+    try {
+      const payment = await Payment.create({
+        paidBy: payer._id,
+        type: "adoption_fee",
+        amount: 50000,
+        description: "Adoption fee",
+        status: "pending",
+      });
+
+      const res = await request(app)
+        .post("/api/payments/webhook")
+        .send(paymongoPayload({ referenceNumber: payment._id.toString() }));
+
+      expect(res.status).toBe(401);
+      expect((await Payment.findById(payment._id)).status).toBe("pending"); // unchanged
+    } finally {
+      process.env.PAYMONGO_WEBHOOK_SECRET = originalSecret;
+    }
   });
 
   it("rejects the webhook when a signature is required and doesn't match", async () => {

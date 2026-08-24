@@ -2,6 +2,7 @@ const cloudinary = require("../config/cloudinary");
 const Pet = require("../models/Pet");
 const { buildListQuery, buildSort, buildPagination } = require("../utils/queryBuilder");
 const { writeAuditLog } = require("../utils/auditLogger");
+const { assertShelterAssignmentAllowed } = require("../utils/shelterOccupancy");
 
 const SEARCH_FIELDS = ["name", "breed", "description"];
 const FILTER_FIELDS = ["status", "species", "gender", "size", "temperament", "energyLevel"];
@@ -69,6 +70,8 @@ async function getPet(req, res, next) {
 async function createPet(req, res, next) {
   try {
     let imageUrl = null;
+    if (req.body.shelterId) await assertShelterAssignmentAllowed(req.body.shelterId);
+
     if (req.file) {
       const result = await uploadBufferToCloudinary(req.file.buffer, "carepaws/pets");
       imageUrl = result.secure_url;
@@ -98,6 +101,30 @@ async function updatePet(req, res, next) {
     if (!pet) return res.status(404).json({ success: false, message: "Pet not found" });
 
     const previousValues = pet.toObject();
+
+    // Owner and status are meant to stay in sync: Adopted/Foster pets
+    // should have an owner, Available/Pending pets should not. The normal
+    // path for changing this is the applications workflow (which keeps
+    // both in lockstep — see applicationController), but this direct
+    // admin edit can also change status, so guard against leaving the
+    // pair in an inconsistent/impossible state.
+    if (req.body.status && req.body.status !== pet.status) {
+      const nextStatus = req.body.status;
+      if ((nextStatus === "Adopted" || nextStatus === "Foster") && !pet.owner) {
+        return res.status(409).json({
+          success: false,
+          message: `Cannot mark this pet as ${nextStatus} without an assigned owner. Use the adoption/foster application workflow to assign one.`,
+        });
+      }
+      if (nextStatus === "Available" || nextStatus === "Pending") {
+        pet.owner = null;
+      }
+    }
+
+    const nextShelterId = Object.prototype.hasOwnProperty.call(req.body, "shelterId") ? req.body.shelterId : pet.shelterId;
+    if (nextShelterId && String(nextShelterId) !== String(pet.shelterId || "")) {
+      await assertShelterAssignmentAllowed(nextShelterId, pet._id);
+    }
 
     if (req.file) {
       const result = await uploadBufferToCloudinary(req.file.buffer, "carepaws/pets");

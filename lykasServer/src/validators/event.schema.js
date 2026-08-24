@@ -12,6 +12,7 @@ const eventCreateSchema = z
     onlineLink: z.string().url().optional(),
     maxAttendees: z.number().int().positive().optional(),
     notes: z.string().max(1000).optional(),
+    status: z.enum(["upcoming", "ongoing", "completed", "cancelled"]).optional(),
   })
   .strict();
 

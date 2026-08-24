@@ -87,7 +87,7 @@ export default function Interviews() {
     }
   }
 
-  const selectableApplications = applications.rows.filter((a) => a.status !== "rejected" && !["completed", "rejected"].includes(a.stage));
+  const selectableApplications = applications.rows.filter((a) => a.status === "pending" && a.stage === "document_review");
 
   return (
     <div>

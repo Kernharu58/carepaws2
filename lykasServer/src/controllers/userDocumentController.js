@@ -1,5 +1,6 @@
 const cloudinary = require("../config/cloudinary");
 const UserDocument = require("../models/UserDocument");
+const Application = require("../models/Application");
 
 function uploadBufferToCloudinary(buffer, folder) {
   return new Promise((resolve, reject) => {
@@ -20,15 +21,54 @@ async function myDocuments(req, res, next) {
   }
 }
 
+// Resolves which application (if any) a newly uploaded document should be
+// linked to. The mobile "Documents" screen — the only upload flow today —
+// is opened generically from the profile tab, not from inside a specific
+// application, so it never sends an `application` id itself; left alone,
+// that means every document it creates is orphaned from the case it's
+// actually for (a proof-of-income upload during a pending adoption has no
+// record of which adoption it belongs to). Where a caller does supply an
+// id, it's trusted only after confirming it actually belongs to this
+// applicant — never taken as-is. Where none is supplied, it's inferred
+// only when unambiguous: exactly one application still in progress for
+// this applicant. With zero or several open applications there's no safe
+// way to guess which one is meant, so the document is left unlinked, same
+// as it always has been.
+async function resolveApplicationId(req) {
+  if (req.body.application) {
+    const application = await Application.findOne({
+      _id: req.body.application,
+      applicant: req.user._id,
+    }).select("_id status");
+    if (!application) {
+      const error = new Error("Application not found");
+      error.statusCode = 404;
+      throw error;
+    }
+    if (application.status !== "pending") {
+      const error = new Error("Documents can only be uploaded while an application is in progress");
+      error.statusCode = 409;
+      throw error;
+    }
+    return application._id;
+  }
+
+  const openApplications = await Application.find({ applicant: req.user._id, status: "pending" })
+    .select("_id")
+    .limit(2);
+  return openApplications.length === 1 ? openApplications[0]._id : null;
+}
+
 async function upload(req, res, next) {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: "No file uploaded" });
 
+    const applicationId = await resolveApplicationId(req);
     const result = await uploadBufferToCloudinary(req.file.buffer, "carepaws/documents");
 
     const doc = await UserDocument.create({
       user: req.user._id,
-      application: req.body.application || null,
+      application: applicationId,
       type: req.body.type,
       label: req.body.label,
       fileUrl: result.secure_url,
@@ -38,6 +78,7 @@ async function upload(req, res, next) {
 
     return res.status(201).json({ success: true, data: doc });
   } catch (err) {
+    if (err?.statusCode) return res.status(err.statusCode).json({ success: false, message: err.message });
     next(err);
   }
 }
@@ -57,7 +98,15 @@ async function list(req, res, next) {
     const filter = {};
     if (req.query.status) filter.status = req.query.status;
     if (req.query.type) filter.type = req.query.type;
-    const data = await UserDocument.find(filter).populate("user", "displayName email").sort({ createdAt: -1 });
+    if (req.query.application) filter.application = req.query.application;
+    const data = await UserDocument.find(filter)
+      .populate("user", "displayName email")
+      .populate({
+        path: "application",
+        select: "pet applicant status stage type",
+        populate: { path: "pet", select: "name" },
+      })
+      .sort({ createdAt: -1 });
     return res.json({ success: true, data });
   } catch (err) {
     next(err);
@@ -72,7 +121,15 @@ async function verify(req, res, next) {
     doc.status = req.body.status;
     doc.verifiedBy = req.user._id;
     doc.verifiedAt = new Date();
-    doc.rejectedReason = req.body.rejectedReason;
+    // Only overwrite the reason when the request actually carries one (or
+    // is explicitly clearing it); a status-only PUT — e.g. re-approving —
+    // shouldn't wipe out a reason that was set moments ago by a separate
+    // call.
+    if (Object.prototype.hasOwnProperty.call(req.body, "rejectedReason")) {
+      doc.rejectedReason = req.body.rejectedReason;
+    } else if (doc.status !== "rejected") {
+      doc.rejectedReason = undefined;
+    }
     await doc.save();
 
     return res.json({ success: true, data: doc });

@@ -3,8 +3,8 @@ const { z } = require("zod");
 const homeVisitCreateSchema = z
   .object({
     application: z.string().min(1),
-    applicant: z.string().min(1),
-    pet: z.string().min(1),
+    applicant: z.string().min(1).optional(),
+    pet: z.string().min(1).optional(),
     scheduledDate: z.string(),
     address: z.string().max(300).optional(),
     assignedTo: z.string().optional(),

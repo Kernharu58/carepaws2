@@ -1,6 +1,8 @@
+import type { ReactElement } from "react";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react-native";
 import LogInScreen from "../app/(auth)/logIn";
 import SignUpScreen from "../app/(auth)/signUp";
+import { AuthProvider } from "../context/AuthContext";
 
 jest.mock("../utils/api", () => {
   const actual = jest.requireActual("../utils/api");
@@ -11,6 +13,10 @@ jest.mock("../utils/api", () => {
 });
 
 import { api } from "../utils/api";
+
+function renderWithAuth(ui: ReactElement) {
+  return render(<AuthProvider>{ui}</AuthProvider>);
+}
 
 describe("LogIn screen", () => {
   beforeEach(() => {
@@ -23,7 +29,7 @@ describe("LogIn screen", () => {
       response: { data: { message: "Invalid email or password" } },
     });
 
-    render(<LogInScreen />);
+    renderWithAuth(<LogInScreen />);
 
     fireEvent.changeText(screen.getByTestId("login-email"), "wrong@example.com");
     fireEvent.changeText(screen.getByTestId("login-password"), "wrongpassword");
@@ -38,7 +44,7 @@ describe("LogIn screen", () => {
       response: { data: { message: "Account is temporarily locked. Try again later." } },
     });
 
-    render(<LogInScreen />);
+    renderWithAuth(<LogInScreen />);
 
     fireEvent.changeText(screen.getByTestId("login-email"), "locked@example.com");
     fireEvent.changeText(screen.getByTestId("login-password"), "password123");
@@ -58,7 +64,7 @@ describe("LogIn screen", () => {
       },
     });
 
-    render(<LogInScreen />);
+    renderWithAuth(<LogInScreen />);
 
     fireEvent.changeText(screen.getByTestId("login-email"), "test@example.com");
     fireEvent.changeText(screen.getByTestId("login-password"), "password123");
@@ -76,7 +82,7 @@ describe("SignUp screen", () => {
   });
 
   it("shows a client-side error when passwords don't match, without calling the API", async () => {
-    render(<SignUpScreen />);
+    renderWithAuth(<SignUpScreen />);
 
     fireEvent.changeText(screen.getByTestId("signup-name"), "Test User");
     fireEvent.changeText(screen.getByTestId("signup-email"), "test@example.com");
@@ -89,7 +95,7 @@ describe("SignUp screen", () => {
   });
 
   it("shows a client-side error when the password is too short, without calling the API", async () => {
-    render(<SignUpScreen />);
+    renderWithAuth(<SignUpScreen />);
 
     fireEvent.changeText(screen.getByTestId("signup-name"), "Test User");
     fireEvent.changeText(screen.getByTestId("signup-email"), "test@example.com");
@@ -107,7 +113,7 @@ describe("SignUp screen", () => {
       response: { data: { message: "An account with this email already exists" } },
     });
 
-    render(<SignUpScreen />);
+    renderWithAuth(<SignUpScreen />);
 
     fireEvent.changeText(screen.getByTestId("signup-name"), "Test User");
     fireEvent.changeText(screen.getByTestId("signup-email"), "dup@example.com");

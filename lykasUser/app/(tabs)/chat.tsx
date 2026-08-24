@@ -65,8 +65,12 @@ export default function ChatScreen() {
       const socket = io(API_URL, { auth: { token } });
       socketRef.current = socket;
 
-      socket.on("connect", () => setConnected(true));
+      socket.on("connect", () => {
+        setConnected(true);
+        loadHistory();
+      });
       socket.on("disconnect", () => setConnected(false));
+      socket.on("connect_error", () => setConnected(false));
 
       socket.on("receiveMessage", (message: ChatMessageData & { userId: string }) => {
         if (message.userId !== user.id) return; // not this conversation
@@ -78,7 +82,12 @@ export default function ChatScreen() {
       cancelled = true;
       socketRef.current?.disconnect();
     };
-  }, [user]);
+  }, [user, loadHistory]);
+
+  useEffect(() => {
+    if (!user || messages.length === 0) return;
+    api.put(`/api/messages/${user.id}/read`).catch(() => {});
+  }, [messages.length, user]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -87,8 +96,11 @@ export default function ChatScreen() {
   }, [messages.length]);
 
   function send() {
-    if (!draft.trim() || !user || !socketRef.current) return;
-    socketRef.current.emit("sendMessage", { userId: user.id, text: draft.trim() });
+    if (!draft.trim() || !user || !socketRef.current || !connected) return;
+    const text = draft.trim();
+    socketRef.current.emit("sendMessage", { userId: user.id, text }, (ack: { success?: boolean; message?: string }) => {
+      if (!ack?.success) setError(ack?.message || "Failed to send message");
+    });
     setDraft("");
   }
 
@@ -101,21 +113,24 @@ export default function ChatScreen() {
         <View className={`h-2 w-2 rounded-full ${connected ? "bg-status-success" : "bg-mutedLight"}`} accessibilityLabel={connected ? "Connected" : "Reconnecting"} />
       </View>
 
-      {error ? (
-        <StateView state="error" message={error} onRetry={loadHistory} />
-      ) : messages.length === 0 ? (
-        <StateView state="empty" title="No messages yet" message="Say hello — shelter staff typically respond within a day." />
-      ) : (
-        <FlatList
-          ref={listRef}
-          data={messages}
-          keyExtractor={(m) => m._id}
-          contentContainerClassName="px-5 py-4"
-          renderItem={({ item }) => <ChatMessage message={item} isOwn={item.sender === "user"} />}
-        />
-      )}
+      <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === "ios" ? "padding" : "height"}>
+        <View className="flex-1">
+          {error ? (
+            <StateView state="error" message={error} onRetry={loadHistory} />
+          ) : messages.length === 0 ? (
+            <StateView state="empty" title="No messages yet" message="Say hello — shelter staff typically respond within a day." />
+          ) : (
+            <FlatList
+              ref={listRef}
+              data={messages}
+              keyExtractor={(m) => m._id}
+              className="flex-1"
+              contentContainerClassName="px-5 py-4"
+              renderItem={({ item }) => <ChatMessage message={item} isOwn={item.sender === "user"} />}
+            />
+          )}
+        </View>
 
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={80}>
         <View className="flex-row items-center gap-2 border-t border-border px-4 py-3">
           <TextInput
             value={draft}

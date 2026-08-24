@@ -1,6 +1,6 @@
 const cron = require("node-cron");
 const logger = require("./utils/logger");
-const { runVaccinationReminders, runDocumentExpiryReminders } = require("./jobs/reminderJobs");
+const { runVaccinationReminders, runDocumentExpiryReminders, runFosterReportMonitoring, runMonitoringReportMonitoring } = require("./jobs/reminderJobs");
 
 /**
  * node-cron scheduler bootstrap. Called once from server.js after the DB
@@ -21,7 +21,21 @@ function startCronJobs() {
     await runDocumentExpiryReminders();
   });
 
-  logger.info("Cron jobs scheduled: vaccination_reminders (07:00), document_expiry_reminders (07:15)");
+  // Every day at 7:30 AM server time.
+  cron.schedule("30 7 * * *", async () => {
+    logger.info("Running scheduled job: foster_report_monitoring");
+    await runFosterReportMonitoring();
+  });
+
+  // Every day at 7:45 AM server time.
+  cron.schedule("45 7 * * *", async () => {
+    logger.info("Running scheduled job: monitoring_report_monitoring");
+    await runMonitoringReportMonitoring();
+  });
+
+  logger.info(
+    "Cron jobs scheduled: vaccination_reminders (07:00), document_expiry_reminders (07:15), foster_report_monitoring (07:30), monitoring_report_monitoring (07:45)"
+  );
 }
 
 module.exports = startCronJobs;

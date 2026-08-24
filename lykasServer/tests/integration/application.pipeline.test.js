@@ -30,6 +30,16 @@ async function registerAndLogin(email, role = "user") {
   return { token: res.body.data.accessToken, user: res.body.data.user };
 }
 
+async function advanceToRiskAssessment(appId, staffToken) {
+  for (const stage of ["document_review", "interview", "home_visit", "risk_assessment"]) {
+    const res = await request(app)
+      .put(`/api/applications/${appId}/stage`)
+      .set("Authorization", `Bearer ${staffToken}`)
+      .send({ stage });
+    expect(res.status).toBe(200);
+  }
+}
+
 describe("Application pipeline: submit -> stage transitions -> approve/reject", () => {
   let applicantToken, staffToken, applicantUserId, pet;
 
@@ -96,6 +106,21 @@ describe("Application pipeline: submit -> stage transitions -> approve/reject", 
     expect(final.stageHistory).toHaveLength(6);
   });
 
+  it("does not allow skipping required pipeline stages", async () => {
+    const submitRes = await request(app)
+      .post("/api/applications")
+      .set("Authorization", `Bearer ${applicantToken}`)
+      .send({ pet: pet._id.toString(), phone: "0917000000", address: "123 Main St" });
+
+    const res = await request(app)
+      .put(`/api/applications/${submitRes.body.data._id}/stage`)
+      .set("Authorization", `Bearer ${staffToken}`)
+      .send({ stage: "home_visit" });
+
+    expect(res.status).toBe(409);
+    expect((await Application.findById(submitRes.body.data._id)).stage).toBe("submitted");
+  });
+
   it("approving an application marks the pet Adopted; rejecting frees it back to Available", async () => {
     const submitRes = await request(app)
       .post("/api/applications")
@@ -103,6 +128,7 @@ describe("Application pipeline: submit -> stage transitions -> approve/reject", 
       .send({ pet: pet._id.toString(), phone: "0917000000", address: "123 Main St" });
 
     const appId = submitRes.body.data._id;
+    await advanceToRiskAssessment(appId, staffToken);
 
     const approveRes = await request(app)
       .put(`/api/applications/${appId}/status`)
@@ -119,6 +145,7 @@ describe("Application pipeline: submit -> stage transitions -> approve/reject", 
       .set("Authorization", `Bearer ${applicantToken}`)
       .send({ pet: pet2._id.toString(), phone: "0917000000", address: "123 Main St" });
 
+    await advanceToRiskAssessment(submitRes2.body.data._id, staffToken);
     const rejectRes = await request(app)
       .put(`/api/applications/${submitRes2.body.data._id}/status`)
       .set("Authorization", `Bearer ${staffToken}`)
@@ -150,6 +177,7 @@ describe("Application pipeline: submit -> stage transitions -> approve/reject", 
       .set("Authorization", `Bearer ${applicantToken}`)
       .send({ pet: pet2._id.toString(), phone: "0917000000", address: "123 Main St", type: "foster" });
 
+    await advanceToRiskAssessment(fosterSubmit.body.data._id, staffToken);
     await request(app)
       .put(`/api/applications/${fosterSubmit.body.data._id}/status`)
       .set("Authorization", `Bearer ${staffToken}`)
@@ -167,6 +195,7 @@ describe("Application pipeline: submit -> stage transitions -> approve/reject", 
       .send({ pet: pet._id.toString(), phone: "0917000000", address: "123 Main St" });
 
     const appId = submitRes.body.data._id;
+    await advanceToRiskAssessment(appId, staffToken);
     await request(app)
       .put(`/api/applications/${appId}/status`)
       .set("Authorization", `Bearer ${staffToken}`)
@@ -215,5 +244,115 @@ describe("Application pipeline: submit -> stage transitions -> approve/reject", 
 
     const asApplicant = await request(app).get(`/api/applications/${appId}`).set("Authorization", `Bearer ${applicantToken}`);
     expect(asApplicant.body.data.internalNotes).toBeUndefined();
+  });
+
+  it("a note's author is populated with a display name, both immediately and on reload", async () => {
+    const submitRes = await request(app)
+      .post("/api/applications")
+      .set("Authorization", `Bearer ${applicantToken}`)
+      .send({ pet: pet._id.toString(), phone: "0917000000", address: "123 Main St" });
+
+    const appId = submitRes.body.data._id;
+
+    const noteRes = await request(app)
+      .post(`/api/applications/${appId}/notes`)
+      .set("Authorization", `Bearer ${staffToken}`)
+      .send({ text: "Applicant seems well-prepared." });
+
+    expect(noteRes.status).toBe(201);
+    expect(noteRes.body.data[0].author.displayName).toBe("Test staff");
+
+    const reloaded = await request(app).get(`/api/applications/${appId}`).set("Authorization", `Bearer ${staffToken}`);
+    expect(reloaded.body.data.internalNotes[0].author.displayName).toBe("Test staff");
+  });
+
+  it("staff recording a walk-in application can specify who the applicant actually is", async () => {
+    const walkIn = await registerAndLogin("walkin@example.com", "user");
+
+    const res = await request(app)
+      .post("/api/applications")
+      .set("Authorization", `Bearer ${staffToken}`)
+      .send({ pet: pet._id.toString(), applicant: walkIn.user.id, phone: "0917000000", address: "123 Main St" });
+
+    expect(res.status).toBe(201);
+    // Regression test: this used to always be the staff member's own id.
+    expect(res.body.data.applicant._id).toBe(walkIn.user.id);
+
+    const stored = await Application.findById(res.body.data._id);
+    expect(stored.applicant.toString()).toBe(walkIn.user.id);
+  });
+
+  it("a non-staff applicant cannot use the applicant field to submit on someone else's behalf", async () => {
+    const other = await registerAndLogin("other@example.com", "user");
+
+    const res = await request(app)
+      .post("/api/applications")
+      .set("Authorization", `Bearer ${applicantToken}`)
+      .send({ pet: pet._id.toString(), applicant: other.user.id, phone: "0917000000", address: "123 Main St" });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.applicant._id).toBe(applicantUserId);
+  });
+
+  it("returns 404 when staff specifies an applicant id that doesn't exist", async () => {
+    const res = await request(app)
+      .post("/api/applications")
+      .set("Authorization", `Bearer ${staffToken}`)
+      .send({ pet: pet._id.toString(), applicant: "507f1f77bcf86cd799439011", phone: "0917000000", address: "123 Main St" });
+
+    expect(res.status).toBe(404);
+  });
+
+  it("keeps the pet and applicant populated in the response after a stage or status change, not just on first load", async () => {
+    const submitRes = await request(app)
+      .post("/api/applications")
+      .set("Authorization", `Bearer ${applicantToken}`)
+      .send({ pet: pet._id.toString(), phone: "0917000000", address: "123 Main St" });
+
+    const appId = submitRes.body.data._id;
+
+    const stageRes = await request(app)
+      .put(`/api/applications/${appId}/stage`)
+      .set("Authorization", `Bearer ${staffToken}`)
+      .send({ stage: "document_review" });
+    expect(stageRes.body.data.pet.name).toBe("Bantay");
+    expect(stageRes.body.data.applicant.displayName).toBe("Test user");
+
+    await request(app)
+      .put(`/api/applications/${appId}/stage`)
+      .set("Authorization", `Bearer ${staffToken}`)
+      .send({ stage: "interview" });
+    await request(app)
+      .put(`/api/applications/${appId}/stage`)
+      .set("Authorization", `Bearer ${staffToken}`)
+      .send({ stage: "home_visit" });
+    await request(app)
+      .put(`/api/applications/${appId}/stage`)
+      .set("Authorization", `Bearer ${staffToken}`)
+      .send({ stage: "risk_assessment" });
+
+    const statusRes = await request(app)
+      .put(`/api/applications/${appId}/status`)
+      .set("Authorization", `Bearer ${staffToken}`)
+      .send({ status: "approved" });
+    expect(statusRes.body.data.pet.name).toBe("Bantay");
+    expect(statusRes.body.data.applicant.displayName).toBe("Test user");
+  });
+
+  it("deleting a pending application releases the pet back to Available", async () => {
+    const submitRes = await request(app)
+      .post("/api/applications")
+      .set("Authorization", `Bearer ${applicantToken}`)
+      .send({ pet: pet._id.toString(), phone: "0917000000", address: "123 Main St" });
+
+    expect((await Pet.findById(pet._id)).status).toBe("Pending");
+
+    const del = await request(app)
+      .delete(`/api/applications/${submitRes.body.data._id}`)
+      .set("Authorization", `Bearer ${staffToken}`);
+
+    expect(del.status).toBe(200);
+    expect((await Pet.findById(pet._id)).status).toBe("Available");
+    expect(await Application.findById(submitRes.body.data._id)).toBeNull();
   });
 });

@@ -5,6 +5,7 @@ const messageController = require("../controllers/messageController");
 const { protect, adminOnly } = require("../middleware/authMiddleware");
 
 router.get("/:userId", protect, messageController.getMessageHistory);
+router.put("/:userId/read", protect, messageController.markConversationRead);
 
 module.exports = router;
 

@@ -4,8 +4,10 @@ export function formatCurrency(centavos: number): string {
   return (centavos / 100).toLocaleString("en-PH", { style: "currency", currency: "PHP" });
 }
 
-export function formatDate(dateStr: string | Date): string {
+export function formatDate(dateStr: string | Date | null | undefined): string {
+  if (dateStr == null) return "Not set";
   const date = typeof dateStr === "string" ? new Date(dateStr) : dateStr;
+  if (Number.isNaN(date.getTime())) return "Not set";
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 

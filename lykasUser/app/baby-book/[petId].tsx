@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, FlatList, Pressable, Modal, Alert } from "react-native";
+import { View, Text, FlatList, Pressable, Modal, Alert, Image } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { api, getApiErrorMessage } from "../../utils/api";
 import { formatDate } from "../../utils/format";
 import StateView from "../../components/StateView";
@@ -16,6 +17,7 @@ interface BabyBookEntry {
   content?: string;
   category: string;
   date: string;
+  photoUrl?: string | null;
 }
 
 const CATEGORIES = ["Milestone", "Health", "Funny Moment", "Training", "First Time", "General"];
@@ -32,6 +34,8 @@ export default function BabyBookScreen() {
   const [category, setCategory] = useState("General");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [photo, setPhoto] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [existingPhotoUrl, setExistingPhotoUrl] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!petId) return;
@@ -56,6 +60,8 @@ export default function BabyBookScreen() {
     setTitle("");
     setContent("");
     setCategory("General");
+    setPhoto(null);
+    setExistingPhotoUrl(null);
     setFormVisible(true);
   }
 
@@ -64,22 +70,57 @@ export default function BabyBookScreen() {
     setTitle(entry.title);
     setContent(entry.content ?? "");
     setCategory(entry.category);
+    setPhoto(null);
+    setExistingPhotoUrl(entry.photoUrl ?? null);
     setFormVisible(true);
   }
 
   function closeForm() {
     setFormVisible(false);
     setEditingId(null);
+    setPhoto(null);
+    setExistingPhotoUrl(null);
+  }
+
+  async function pickPhoto() {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert("Permission needed", "Allow photo library access to add a picture to this entry.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets?.[0]) {
+      setPhoto(result.assets[0]);
+    }
   }
 
   async function handleSave() {
     if (!title) return;
     setSaving(true);
     try {
+      const formData = new FormData();
+      formData.append("title", title);
+      if (content) formData.append("content", content);
+      formData.append("category", category);
+      if (photo) {
+        formData.append("photo", {
+          uri: photo.uri,
+          name: photo.fileName ?? "photo.jpg",
+          type: photo.mimeType ?? "image/jpeg",
+        } as unknown as Blob);
+      }
+
       if (editingId) {
-        await api.put(`/api/baby-book/entry/${editingId}`, { title, content, category });
+        // Don't set Content-Type manually — axios/React Native needs to
+        // compute it (including the multipart boundary) from the
+        // FormData instance itself, or the server can't parse the body.
+        await api.put(`/api/baby-book/entry/${editingId}`, formData);
       } else {
-        await api.post("/api/baby-book", { pet: petId, title, content, category });
+        formData.append("pet", petId ?? "");
+        await api.post("/api/baby-book", formData);
       }
       closeForm();
       load();
@@ -146,6 +187,9 @@ export default function BabyBookScreen() {
               accessibilityLabel={`Edit entry: ${item.title}`}
               className="rounded-2xl border border-border bg-white p-4"
             >
+              {item.photoUrl && (
+                <Image source={{ uri: item.photoUrl }} className="mb-3 h-40 w-full rounded-xl" resizeMode="cover" />
+              )}
               <View className="mb-1 flex-row items-center justify-between">
                 <Text className="font-sans-medium text-base text-ink" numberOfLines={1}>
                   {item.title}
@@ -187,6 +231,31 @@ export default function BabyBookScreen() {
               numberOfLines={3}
               style={{ minHeight: 72, textAlignVertical: "top" }}
             />
+
+            <View className="mb-4">
+              <Text className="mb-1.5 font-sans-medium text-xs text-ink">Photo</Text>
+              {photo || existingPhotoUrl ? (
+                <View className="mb-2">
+                  <Image
+                    source={{ uri: photo ? photo.uri : existingPhotoUrl! }}
+                    className="h-32 w-full rounded-xl"
+                    resizeMode="cover"
+                  />
+                </View>
+              ) : null}
+              <Pressable
+                onPress={pickPhoto}
+                accessibilityRole="button"
+                accessibilityLabel="Choose photo"
+                className="flex-row items-center gap-1.5 self-start rounded-full border border-border bg-white px-3 py-2"
+              >
+                <Ionicons name="image-outline" size={14} color={colors.primary} />
+                <Text className="font-sans text-xs text-ink">
+                  {photo || existingPhotoUrl ? "Replace photo" : "Add a photo"}
+                </Text>
+              </Pressable>
+            </View>
+
             <View className="mb-4 flex-row flex-wrap gap-2">
               {CATEGORIES.map((c) => (
                 <Pressable

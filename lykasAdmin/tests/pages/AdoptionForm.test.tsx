@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import AdoptionForm from "../../src/pages/AdoptionForm";
+import { ToastProvider } from "../../src/context/ToastContext";
 
 vi.mock("../../src/services/api", async () => {
   const actual = await vi.importActual<typeof import("../../src/services/api")>("../../src/services/api");
@@ -15,14 +16,25 @@ vi.mock("../../src/services/api", async () => {
 import { api } from "../../src/services/api";
 
 const AVAILABLE_PETS = [{ _id: "pet1", name: "Bantay", species: "Dog", status: "Available" }];
+const APPLICANTS = [{ _id: "user1", displayName: "Maria Santos", email: "maria@example.com" }];
+
+function mockListEndpoints() {
+  vi.mocked(api.get).mockImplementation((url: string) => {
+    if (url === "/api/pets") return Promise.resolve({ data: { data: AVAILABLE_PETS } });
+    if (url === "/api/auth/users") return Promise.resolve({ data: { data: APPLICANTS } });
+    return Promise.resolve({ data: { data: [] } });
+  });
+}
 
 function renderPage() {
   return render(
     <MemoryRouter initialEntries={["/adoptions/new"]}>
-      <Routes>
-        <Route path="/adoptions/new" element={<AdoptionForm />} />
-        <Route path="/adoptions" element={<div>Adoptions list</div>} />
-      </Routes>
+      <ToastProvider>
+        <Routes>
+          <Route path="/adoptions/new" element={<AdoptionForm />} />
+          <Route path="/adoptions" element={<div>Adoptions list</div>} />
+        </Routes>
+      </ToastProvider>
     </MemoryRouter>
   );
 }
@@ -31,23 +43,29 @@ describe("AdoptionForm page", () => {
   beforeEach(() => {
     vi.mocked(api.get).mockReset();
     vi.mocked(api.post).mockReset();
-    vi.mocked(api.get).mockResolvedValue({ data: { data: AVAILABLE_PETS } });
+    mockListEndpoints();
   });
 
-  it("loads available pets into the pet selector", async () => {
+  it("loads available pets and applicants into their selectors", async () => {
     renderPage();
 
     await waitFor(() => expect(api.get).toHaveBeenCalledWith("/api/pets", { params: { status: "Available", limit: 100 } }));
+    await waitFor(() =>
+      expect(api.get).toHaveBeenCalledWith("/api/auth/users", { params: { role: "user", limit: 100, sortBy: "displayName", sortOrder: "asc" } })
+    );
     expect(await screen.findByText("Bantay (Dog)")).toBeInTheDocument();
+    expect(await screen.findByText("Maria Santos (maria@example.com)")).toBeInTheDocument();
   });
 
-  it("submits the application with the entered values and navigates back to the list", async () => {
+  it("submits the application with the entered values, including the selected applicant, and navigates back to the list", async () => {
     vi.mocked(api.post).mockResolvedValue({ data: { success: true } });
 
     renderPage();
     await screen.findByText("Bantay (Dog)");
+    await screen.findByText("Maria Santos (maria@example.com)");
 
     const user = userEvent.setup();
+    await user.selectOptions(screen.getByLabelText("Applicant"), "user1");
     await user.selectOptions(screen.getByLabelText("Pet"), "pet1");
     await user.type(screen.getByLabelText("Phone"), "0917000000");
     await user.type(screen.getByLabelText("Address"), "123 Main St");
@@ -57,7 +75,7 @@ describe("AdoptionForm page", () => {
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith(
         "/api/applications",
-        expect.objectContaining({ pet: "pet1", phone: "0917000000", address: "123 Main St", type: "adoption" })
+        expect.objectContaining({ applicant: "user1", pet: "pet1", phone: "0917000000", address: "123 Main St", type: "adoption" })
       )
     );
 
@@ -84,8 +102,10 @@ describe("AdoptionForm page", () => {
 
     renderPage();
     await screen.findByText("Bantay (Dog)");
+    await screen.findByText("Maria Santos (maria@example.com)");
 
     const user = userEvent.setup();
+    await user.selectOptions(screen.getByLabelText("Applicant"), "user1");
     await user.selectOptions(screen.getByLabelText("Pet"), "pet1");
     await user.type(screen.getByLabelText("Phone"), "0917000000");
     await user.type(screen.getByLabelText("Address"), "123 Main St");

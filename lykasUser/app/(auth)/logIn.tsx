@@ -1,3 +1,4 @@
+// app/(auth)/logIn.tsx
 import { useState } from "react";
 import { View, Text, ScrollView, Pressable } from "react-native";
 import { Link, router } from "expo-router";
@@ -72,7 +73,7 @@ export default function LogInScreen() {
         )}
 
         <FormInput label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" testID="login-email" />
-        <FormInput label="Password" value={password} onChangeText={setPassword} secureTextEntry testID="login-password" />
+        <FormInput label="Password" value={password} onChangeText={setPassword} isPassword testID="login-password" />
 
         <Link href="/forgot-password" asChild>
           <Pressable className="mb-5 self-end" accessibilityRole="button">
@@ -96,7 +97,7 @@ export default function LogInScreen() {
         />
 
         <View className="mt-8 flex-row justify-center gap-1">
-          <Text className="font-sans text-sm text-muted">Don't have an account?</Text>
+          <Text className="font-sans text-sm text-muted">Don&apos;t have an account?</Text>
           <Link href="/signUp" asChild>
             <Pressable accessibilityRole="button">
               <Text className="font-sans-medium text-sm text-primary">Sign up</Text>

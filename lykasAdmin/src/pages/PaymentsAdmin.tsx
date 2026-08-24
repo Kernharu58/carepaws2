@@ -51,7 +51,7 @@ export default function PaymentsAdmin() {
         onSearchChange={list.onSearchChange}
         filters={[
           { key: "type", label: "Type", options: [{ value: "donation", label: "Donation" }, { value: "adoption_fee", label: "Adoption fee" }, { value: "event_fee", label: "Event fee" }] },
-          { key: "status", label: "Status", options: [{ value: "pending", label: "Pending" }, { value: "paid", label: "Paid" }, { value: "failed", label: "Failed" }, { value: "refunded", label: "Refunded" }] },
+          { key: "status", label: "Status", options: [{ value: "pending", label: "Pending" }, { value: "paid", label: "Paid" }, { value: "failed", label: "Failed" }, { value: "cancelled", label: "Cancelled" }, { value: "refunded", label: "Refunded" }] },
         ]}
         filterValues={list.filters}
         onFilterChange={list.onFilterChange}

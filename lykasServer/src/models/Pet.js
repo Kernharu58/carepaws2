@@ -24,6 +24,7 @@ const petSchema = new mongoose.Schema(
       index: true,
     },
     owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    shelterId: { type: mongoose.Schema.Types.ObjectId, ref: "Shelter", default: null, index: true },
     isDeleted: { type: Boolean, default: false, index: true },
     deletedAt: { type: Date, default: null },
     deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },

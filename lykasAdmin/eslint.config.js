@@ -3,6 +3,7 @@ import tseslint from "@typescript-eslint/eslint-plugin";
 import tsparser from "@typescript-eslint/parser";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
+import globals from "globals";
 
 export default [
   js.configs.recommended,
@@ -11,7 +12,7 @@ export default [
     languageOptions: {
       parser: tsparser,
       parserOptions: { ecmaFeatures: { jsx: true } },
-      globals: { window: "readonly", document: "readonly", console: "readonly", localStorage: "readonly", fetch: "readonly" },
+      globals: globals.browser,
     },
     plugins: {
       "@typescript-eslint": tseslint,

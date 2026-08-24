@@ -15,7 +15,7 @@ const volunteerRegisterSchema = z
   .strict();
 
 const volunteerStatusSchema = z
-  .object({ status: z.enum(["pending", "approved", "rejected", "inactive"]) })
+  .object({ status: z.enum(["pending", "approved", "rejected", "inactive"]), notes: z.string().max(1000).optional() })
   .strict();
 
 const logHoursSchema = z

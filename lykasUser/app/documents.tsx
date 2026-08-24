@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { View, Text, FlatList, Pressable, Alert } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as DocumentPicker from "expo-document-picker";
 import { Ionicons } from "@expo/vector-icons";
@@ -14,6 +14,7 @@ interface UserDocument {
   type: string;
   label?: string;
   status: string;
+  rejectedReason?: string;
   createdAt: string;
 }
 
@@ -26,6 +27,7 @@ const DOC_TYPES = [
 ];
 
 export default function DocumentsScreen() {
+  const { applicationId } = useLocalSearchParams<{ applicationId?: string }>();
   const [documents, setDocuments] = useState<UserDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,13 +62,17 @@ export default function DocumentsScreen() {
     try {
       const formData = new FormData();
       formData.append("type", type);
+      if (applicationId) formData.append("application", applicationId);
       formData.append("file", {
         uri: asset.uri,
         name: asset.name,
         type: asset.mimeType ?? "application/octet-stream",
       } as unknown as Blob);
 
-      await api.post("/api/documents", formData, { headers: { "Content-Type": "multipart/form-data" } });
+      // Don't set Content-Type manually — axios/React Native needs to
+      // compute it (including the multipart boundary) from the FormData
+      // instance itself, or the server can't parse the body.
+      await api.post("/api/documents", formData);
       load();
     } catch (err) {
       Alert.alert("Upload failed", getApiErrorMessage(err));
@@ -113,9 +119,14 @@ export default function DocumentsScreen() {
           keyExtractor={(d) => d._id}
           contentContainerClassName="px-5 pb-8 gap-2"
           renderItem={({ item }) => (
-            <View className="flex-row items-center justify-between rounded-xl border border-border bg-white px-4 py-3">
-              <Text className="font-sans text-sm text-ink">{DOC_TYPES.find((t) => t.value === item.type)?.label ?? item.type}</Text>
-              <StatusBadge status={item.status} />
+            <View className="rounded-xl border border-border bg-white px-4 py-3">
+              <View className="flex-row items-center justify-between">
+                <Text className="font-sans text-sm text-ink">{DOC_TYPES.find((t) => t.value === item.type)?.label ?? item.type}</Text>
+                <StatusBadge status={item.status} />
+              </View>
+              {item.status === "rejected" && item.rejectedReason && (
+                <Text className="mt-1.5 font-sans text-xs text-status-danger">{item.rejectedReason}</Text>
+              )}
             </View>
           )}
         />

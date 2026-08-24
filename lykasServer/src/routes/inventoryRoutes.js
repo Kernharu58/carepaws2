@@ -5,6 +5,7 @@ const { protect, adminOnly } = require("../middleware/authMiddleware");
 const { buildListQuery, buildSort, buildPagination } = require("../utils/queryBuilder");
 const validateRequest = require("../middleware/validateRequest");
 const { inventoryItemSchema, inventoryUpdateSchema, inventoryAdjustSchema } = require("../validators/inventory.schema");
+const { applyManualMovement } = require("../utils/inventoryService");
 
 router.get("/summary", protect, adminOnly, async (req, res, next) => {
   try {
@@ -39,9 +40,28 @@ router.get("/:id", protect, adminOnly, async (req, res, next) => {
   }
 });
 
+router.get("/:id/movements", protect, adminOnly, async (req, res, next) => {
+  try {
+    const item = await InventoryItem.findById(req.params.id).select("name quantity unit movements");
+    if (!item) return res.status(404).json({ success: false, message: "Item not found" });
+    const movements = [...item.movements].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    res.json({ success: true, data: movements });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post("/", protect, adminOnly, validateRequest(inventoryItemSchema), async (req, res, next) => {
   try {
-    const item = await InventoryItem.create(req.body);
+    const { quantity = 0, ...fields } = req.body;
+    const item = new InventoryItem(fields);
+    if (quantity > 0) {
+      item.quantity = quantity;
+      item.movements.push({ type: "restock", quantity, note: "Initial stock", actor: req.user._id, sourceType: "manual" });
+      item.lastRestockedAt = new Date();
+      item.lastRestockedBy = req.user._id;
+    }
+    await item.save();
     res.status(201).json({ success: true, data: item });
   } catch (err) {
     next(err);
@@ -50,7 +70,7 @@ router.post("/", protect, adminOnly, validateRequest(inventoryItemSchema), async
 
 router.put("/:id", protect, adminOnly, validateRequest(inventoryUpdateSchema), async (req, res, next) => {
   try {
-    const item = await InventoryItem.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const item = await InventoryItem.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
     if (!item) return res.status(404).json({ success: false, message: "Item not found" });
     res.json({ success: true, data: item });
   } catch (err) {
@@ -58,23 +78,18 @@ router.put("/:id", protect, adminOnly, validateRequest(inventoryUpdateSchema), a
   }
 });
 
-// POST /api/inventory/:id/adjust — logs a movement and updates quantity atomically
 router.post("/:id/adjust", protect, adminOnly, validateRequest(inventoryAdjustSchema), async (req, res, next) => {
   try {
     const { type, quantity, note } = req.body;
-    const item = await InventoryItem.findById(req.params.id);
+    const item = await InventoryItem.findById(req.params.id).select("_id quantity");
     if (!item) return res.status(404).json({ success: false, message: "Item not found" });
 
-    const delta = type === "usage" ? -Math.abs(quantity) : Math.abs(quantity);
-    item.quantity = Math.max(0, item.quantity + delta);
-    item.movements.push({ type, quantity, note, actor: req.user._id });
-    if (type === "restock") {
-      item.lastRestockedAt = new Date();
-      item.lastRestockedBy = req.user._id;
+    const updated = await applyManualMovement({ itemId: item._id, type, quantity, note, actor: req.user._id });
+    if (!updated) {
+      return res.status(409).json({ success: false, message: "Insufficient stock for this usage" });
     }
-    await item.save();
 
-    res.json({ success: true, data: item });
+    res.json({ success: true, data: updated });
   } catch (err) {
     next(err);
   }

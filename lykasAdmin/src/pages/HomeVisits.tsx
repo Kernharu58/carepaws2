@@ -84,7 +84,7 @@ export default function HomeVisits() {
     }
   }
 
-  const selectableApplications = applications.rows.filter((a) => a.status !== "rejected" && !["completed", "rejected"].includes(a.stage));
+  const selectableApplications = applications.rows.filter((a) => a.status === "pending" && a.stage === "home_visit");
 
   return (
     <div>

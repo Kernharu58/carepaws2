@@ -18,6 +18,8 @@ interface Shelter {
   status: string;
   capacity: number;
   currentOccupancy: number;
+  availableCapacity: number;
+  occupancyPercentage: number;
 }
 
 export default function ShelterManagement() {
@@ -34,7 +36,7 @@ export default function ShelterManagement() {
   const columns: Column<Shelter>[] = [
     { key: "name", header: "Name", accessor: (s) => s.name },
     { key: "type", header: "Type", accessor: (s) => <span className="capitalize">{s.type.replace(/_/g, " ")}</span> },
-    { key: "occupancy", header: "Occupancy", accessor: (s) => `${s.currentOccupancy}/${s.capacity}` },
+    { key: "occupancy", header: "Occupancy", accessor: (s) => `${s.currentOccupancy}/${s.capacity} (${s.occupancyPercentage}%) · ${s.availableCapacity} available` },
     { key: "status", header: "Status", accessor: (s) => <StatusBadge status={s.status} /> },
   ];
 

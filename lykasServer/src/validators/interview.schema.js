@@ -3,8 +3,8 @@ const { z } = require("zod");
 const interviewCreateSchema = z
   .object({
     application: z.string().min(1),
-    applicant: z.string().min(1),
-    pet: z.string().min(1),
+    applicant: z.string().min(1).optional(),
+    pet: z.string().min(1).optional(),
     scheduledDate: z.string(),
     method: z.enum(["In-person", "Video call", "Phone call"]),
     location: z.string().max(300).optional(),

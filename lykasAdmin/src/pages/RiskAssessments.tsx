@@ -85,9 +85,7 @@ export default function RiskAssessments() {
     }
   }
 
-  const selectableApplications = applications.rows.filter(
-    (a) => a.status !== "rejected" && !["completed", "rejected"].includes(a.stage)
-  );
+  const selectableApplications = applications.rows.filter((a) => a.status === "pending" && a.stage === "risk_assessment");
 
   return (
     <div>

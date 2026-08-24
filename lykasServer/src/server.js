@@ -1,5 +1,15 @@
 require("dotenv").config();
 
+// Must be the first import in your app (after env vars are loaded), so
+// Sentry can auto-instrument express/http/mongoose etc. as they're required
+// below.
+const Sentry = require("@sentry/node");
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN, // Reads from Render environment variables
+  tracesSampleRate: 1.0,        // Capture 100% of transactions for performance monitoring
+});
+
 const express = require("express");
 const http = require("http");
 const cors = require("cors");
@@ -17,6 +27,8 @@ const maintenanceMode = require("./middleware/maintenanceMode");
 const { globalLimiter } = require("./middleware/rateLimitMiddleware");
 const { notFoundHandler, errorHandler } = require("./middleware/errorHandler");
 const Message = require("./models/Message");
+const User = require("./models/User");
+const { notifyOnce } = require("./utils/notificationHelper");
 
 const app = express();
 const server = http.createServer(app);
@@ -158,16 +170,49 @@ io.on("connection", (socket) => {
     if (isStaff) socket.join("admin_room");
   });
 
-  socket.on("sendMessage", async ({ userId, text, image }) => {
+  socket.on("sendMessage", async ({ userId, text, image }, acknowledge) => {
     try {
+      if (!userId || (!String(text || "").trim() && !image)) {
+        const error = { success: false, message: "A message or image is required" };
+        if (typeof acknowledge === "function") acknowledge(error);
+        return;
+      }
+
       // sender is derived server-side — never trust a client-supplied value
       const sender = socket.userId === userId ? "user" : "shelter";
 
-      const message = await Message.create({ userId, sender, text, image });
+      const message = await Message.create({ userId, sender, text: text?.trim(), image, isRead: false });
+
+      // Persist a notification for the other side of the conversation.
+      // The message itself remains the source of truth for chat history.
+      if (sender === "shelter") {
+        await notifyOnce({
+          recipient: userId,
+          type: "CHAT_MESSAGE",
+          title: "New chat message",
+          message: text ? String(text).slice(0, 160) : "You received a new message from CarePaws.",
+          refModel: null,
+          refId: null,
+          dedupeKey: `chat-message:${message._id}:user`,
+        });
+      } else {
+        const staffUsers = await User.find({ role: { $in: ["staff", "admin", "super_admin"] }, isDeleted: { $ne: true } }).select("_id");
+        await Promise.all(staffUsers.map((staff) => notifyOnce({
+          recipient: staff._id,
+          type: "CHAT_MESSAGE",
+          title: "New chat message",
+          message: text ? String(text).slice(0, 160) : "A user sent a new chat message.",
+          refModel: null,
+          refId: null,
+          dedupeKey: `chat-message:${message._id}:staff:${staff._id}`,
+        })));
+      }
 
       io.to(userId).to("admin_room").emit("receiveMessage", message);
+      if (typeof acknowledge === "function") acknowledge({ success: true, data: message });
     } catch (err) {
       logger.error({ err }, "Failed to persist/emit chat message");
+      if (typeof acknowledge === "function") acknowledge({ success: false, message: "Failed to send message" });
     }
   });
 
@@ -198,15 +243,4 @@ if (require.main === module) {
 }
 
 module.exports = { app, server, io };
-
-
-// Must be the first import in your app
-const Sentry = require("@sentry/node");
-
-Sentry.init({
-  dsn: process.env.SENTRY_DSN, // Reads from Render environment variables
-  tracesSampleRate: 1.0,        // Capture 100% of transactions for performance monitoring
-});
-
-// Your Redis and Express code goes here
 

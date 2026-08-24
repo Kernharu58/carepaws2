@@ -19,6 +19,7 @@ interface Message {
 interface ChatSession {
   user: { _id: string; displayName: string; email: string } | null;
   lastMessage: Message;
+  unreadCount?: number;
 }
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
@@ -45,6 +46,10 @@ export default function Chat() {
 
     socket.on("connect", () => {
       socket.emit("joinAdmin");
+      api.get("/api/chat-sessions").then((res) => setSessions(res.data.data)).catch(() => {});
+      if (activeUserIdRef.current) {
+        api.get(`/api/messages/${activeUserIdRef.current}`).then((res) => setMessages(res.data.data)).catch(() => {});
+      }
     });
 
     socket.on("receiveMessage", (message: Message) => {
@@ -52,7 +57,7 @@ export default function Chat() {
         const idx = prev.findIndex((s) => s.user?._id === message.userId);
         if (idx === -1) return prev;
         const updated = [...prev];
-        updated[idx] = { ...updated[idx], lastMessage: message };
+        updated[idx] = { ...updated[idx], lastMessage: message, unreadCount: activeUserIdRef.current === message.userId ? 0 : (updated[idx].unreadCount || 0) + (message.sender === "user" ? 1 : 0) };
         return updated.sort((a, b) => new Date(b.lastMessage.createdAt).getTime() - new Date(a.lastMessage.createdAt).getTime());
       });
 
@@ -86,6 +91,7 @@ export default function Chat() {
     api
       .get(`/api/messages/${activeUserId}`)
       .then((res) => setMessages(res.data.data))
+      .then(() => api.put(`/api/messages/${activeUserId}/read`))
       .finally(() => setMessagesLoading(false));
   }, [activeUserId]);
 
@@ -95,7 +101,10 @@ export default function Chat() {
 
   function sendMessage() {
     if (!draft.trim() || !activeUserId || !socketRef.current) return;
-    socketRef.current.emit("sendMessage", { userId: activeUserId, text: draft.trim() });
+    const text = draft.trim();
+    socketRef.current.emit("sendMessage", { userId: activeUserId, text }, (ack: { success?: boolean }) => {
+      if (!ack?.success) return;
+    });
     setDraft("");
   }
 
@@ -128,7 +137,10 @@ export default function Chat() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-gray-900">{s.user?.displayName ?? "Unknown user"}</p>
-                    <p className="truncate text-xs text-gray-500">{s.lastMessage.text}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-xs text-gray-500">{s.lastMessage.text}</p>
+                      {!!s.unreadCount && <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-white">{s.unreadCount}</span>}
+                    </div>
                   </div>
                 </button>
               ))

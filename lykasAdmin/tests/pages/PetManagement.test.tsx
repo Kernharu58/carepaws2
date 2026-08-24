@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import PetManagement from "../../src/pages/PetManagement";
+import { ToastProvider } from "../../src/context/ToastContext";
 
 vi.mock("../../src/services/api", async () => {
   const actual = await vi.importActual<typeof import("../../src/services/api")>("../../src/services/api");
@@ -39,6 +40,16 @@ function mockListEndpoint() {
   });
 }
 
+function renderPage() {
+  return render(
+    <MemoryRouter initialEntries={["/pets/management"]}>
+      <ToastProvider>
+        <PetManagement />
+      </ToastProvider>
+    </MemoryRouter>
+  );
+}
+
 describe("PetManagement page", () => {
   beforeEach(() => {
     vi.mocked(api.get)?.mockReset?.();
@@ -46,11 +57,7 @@ describe("PetManagement page", () => {
   });
 
   it("renders the pet list and a prompt to select a pet before anything is chosen", async () => {
-    render(
-      <MemoryRouter initialEntries={["/pets/management"]}>
-        <PetManagement />
-      </MemoryRouter>
-    );
+    renderPage();
 
     await waitFor(() => expect(screen.getByText("Bantay")).toBeInTheDocument());
     expect(screen.getByText("Luna")).toBeInTheDocument();
@@ -58,11 +65,7 @@ describe("PetManagement page", () => {
   });
 
   it("loads and displays a pet's detail panel once selected", async () => {
-    render(
-      <MemoryRouter initialEntries={["/pets/management"]}>
-        <PetManagement />
-      </MemoryRouter>
-    );
+    renderPage();
 
     await waitFor(() => expect(screen.getByText("Bantay")).toBeInTheDocument());
 
@@ -75,11 +78,7 @@ describe("PetManagement page", () => {
   });
 
   it("saves profile changes via PUT /api/pets/:id", async () => {
-    render(
-      <MemoryRouter initialEntries={["/pets/management"]}>
-        <PetManagement />
-      </MemoryRouter>
-    );
+    renderPage();
 
     await waitFor(() => expect(screen.getByText("Bantay")).toBeInTheDocument());
 
@@ -87,10 +86,17 @@ describe("PetManagement page", () => {
     await user.click(screen.getByText("Bantay"));
     await waitFor(() => expect(screen.getByText("Bantay's profile")).toBeInTheDocument());
 
+    await user.type(screen.getByLabelText("Health status"), "Recovering");
     await user.click(screen.getByRole("button", { name: /save changes/i }));
 
     await waitFor(() => {
-      expect(api.put).toHaveBeenCalledWith(expect.stringContaining("/api/pets/pet1"), expect.any(FormData), expect.any(Object));
+      expect(api.put).toHaveBeenCalledWith(expect.stringContaining("/api/pets/pet1"), expect.any(FormData));
     });
+
+    const [, formData] = vi.mocked(api.put).mock.calls[0] as [string, FormData];
+    expect(formData.get("status")).toBe("Available");
+    expect(formData.get("healthStatus")).toBe("Recovering");
+
+    expect(await screen.findByText("Pet profile updated")).toBeInTheDocument();
   });
 });

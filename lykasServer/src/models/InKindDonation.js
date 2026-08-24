@@ -17,6 +17,7 @@ const inKindDonationSchema = new mongoose.Schema(
     status: { type: String, enum: ["pending", "confirmed", "received", "cancelled"], default: "pending" },
     staffNote: { type: String },
     receivedAt: { type: Date, default: null },
+    inventoryProcessedAt: { type: Date, default: null },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
     deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },

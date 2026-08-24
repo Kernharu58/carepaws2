@@ -80,7 +80,7 @@ export default function Adoptions() {
             >
               <Eye className="h-4 w-4" />
             </button>
-            {app.status === "pending" && (
+            {app.status === "pending" && app.stage === "risk_assessment" && (
               <>
                 <button
                   type="button"

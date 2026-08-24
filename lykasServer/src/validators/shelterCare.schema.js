@@ -38,11 +38,13 @@ const behavioralObsSchema = z
 const cageAssignmentSchema = z
   .object({
     pet: z.string().min(1),
-    cageNumber: z.string().min(1).max(50),
+    cageId: z.string().min(1).optional(),
+    cageNumber: z.string().min(1).max(50).optional(),
     section: z.string().max(100).optional(),
     notes: z.string().max(500).optional(),
   })
-  .strict();
+  .strict()
+  .refine((value) => value.cageId || value.cageNumber, { message: "cageId or cageNumber is required" });
 
 const quarantineSchema = z
   .object({

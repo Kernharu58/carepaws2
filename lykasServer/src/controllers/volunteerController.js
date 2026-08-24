@@ -79,6 +79,7 @@ async function updateStatus(req, res, next) {
 
     const previousValues = { status: volunteer.status };
     volunteer.status = req.body.status;
+    if (req.body.notes !== undefined) volunteer.notes = req.body.notes;
     volunteer.reviewedBy = req.user._id;
     volunteer.reviewedAt = new Date();
     await volunteer.save();
@@ -89,7 +90,7 @@ async function updateStatus(req, res, next) {
       entityType: "Volunteer",
       entityId: volunteer._id,
       previousValues,
-      newValues: { status: volunteer.status },
+      newValues: { status: volunteer.status, ...(req.body.notes !== undefined ? { notes: volunteer.notes } : {}) },
       req,
     });
 

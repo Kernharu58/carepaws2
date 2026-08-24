@@ -15,6 +15,7 @@ interface InKindDonation {
   donatedBy?: { displayName: string };
   dropOff: string;
   status: string;
+  inventoryProcessedAt?: string | null;
 }
 
 export default function GoodsDonations() {
@@ -41,6 +42,7 @@ export default function GoodsDonations() {
     { key: "donatedBy", header: "Donor", accessor: (d) => d.donatedBy?.displayName || "Anonymous" },
     { key: "dropOff", header: "Drop-off", accessor: (d) => <span className="capitalize">{d.dropOff.replace(/_/g, " ")}</span> },
     { key: "status", header: "Status", accessor: (d) => <StatusBadge status={d.status} /> },
+    { key: "inventory", header: "Inventory", accessor: (d) => d.inventoryProcessedAt ? "Synced" : "Not received" },
   ];
 
   return (

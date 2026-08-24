@@ -11,7 +11,7 @@ const eventSchema = new mongoose.Schema(
     isOnline: { type: Boolean, default: false },
     onlineLink: { type: String },
     maxAttendees: { type: Number },
-    currentAttendees: { type: Number, default: 0 },
+    currentAttendees: { type: Number, default: 0, min: 0 },
     imageUrl: { type: String },
     status: { type: String, enum: ["upcoming", "ongoing", "completed", "cancelled"], default: "upcoming" },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
@@ -31,6 +31,13 @@ const eventRegistrationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// A user may have only one active registration for an event. Cancelled registrations
+// remain as history and may be reactivated.
+eventRegistrationSchema.index(
+  { event: 1, user: 1 },
+  { unique: true, partialFilterExpression: { status: { $in: ["registered", "attended"] } } }
+);
+
 const eventVolunteerAssignmentSchema = new mongoose.Schema(
   {
     event: { type: mongoose.Schema.Types.ObjectId, ref: "Event", required: true, index: true },
@@ -43,6 +50,8 @@ const eventVolunteerAssignmentSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+eventVolunteerAssignmentSchema.index({ event: 1, volunteer: 1 }, { unique: true });
 
 module.exports = {
   Event: mongoose.model("Event", eventSchema),

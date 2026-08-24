@@ -11,9 +11,13 @@ interface MonitoringReport {
   _id: string;
   pet: { name: string };
   submittedBy: { displayName: string };
-  reportDate: string;
-  overallCondition: string;
-  status: string;
+  monitoringPeriod: number;
+  scheduledDate: string;
+  dueDate: string;
+  reportDate?: string | null;
+  submittedAt?: string | null;
+  overallCondition?: string;
+  status: "scheduled" | "pending" | "reviewed" | "flagged";
 }
 
 export default function Monitoring() {
@@ -24,8 +28,9 @@ export default function Monitoring() {
   async function review(report: MonitoringReport, status: "reviewed" | "flagged") {
     setActingOn(report._id);
     try {
-      await api.put(`/api/monitoring-reports/${report._id}/review`, { status });
-      showToast(`Report marked ${status}`, "success");
+      const response = await api.put(`/api/monitoring-reports/${report._id}/review`, { status });
+      if (!response.data?.success) throw new Error("Monitoring report review failed");
+      showToast(status === "reviewed" ? "Monitoring completed" : "Report flagged for follow-up", "success");
       list.reload();
     } catch (err) {
       showToast(getApiErrorMessage(err, "Failed to update report"), "error");
@@ -36,15 +41,23 @@ export default function Monitoring() {
 
   const columns: Column<MonitoringReport>[] = [
     { key: "pet", header: "Pet", accessor: (r) => r.pet?.name },
-    { key: "submittedBy", header: "Submitted by", accessor: (r) => r.submittedBy?.displayName },
-    { key: "reportDate", header: "Date", accessor: (r) => new Date(r.reportDate).toLocaleDateString() },
-    { key: "overallCondition", header: "Condition", accessor: (r) => r.overallCondition },
+    { key: "submittedBy", header: "Adopter", accessor: (r) => r.submittedBy?.displayName },
+    { key: "period", header: "Period", accessor: (r) => `Check-in ${r.monitoringPeriod}` },
+    {
+      key: "schedule",
+      header: "Schedule",
+      accessor: (r) => r.status === "scheduled"
+        ? new Date(r.scheduledDate).toLocaleDateString()
+        : new Date(r.dueDate).toLocaleDateString(),
+    },
+    { key: "reportDate", header: "Submitted", accessor: (r) => r.reportDate ? new Date(r.reportDate).toLocaleDateString() : "—" },
+    { key: "overallCondition", header: "Condition", accessor: (r) => r.overallCondition || "—" },
     { key: "status", header: "Status", accessor: (r) => <StatusBadge status={r.status} /> },
   ];
 
   return (
     <div>
-      <PageHeader title="Post-Adoption Monitoring" description="Review post-adoption check-ins from adopters." />
+      <PageHeader title="Post-Adoption Monitoring" description="Track scheduled check-ins and review submitted monitoring reports." />
       <DataTable
         columns={columns}
         rows={list.rows}
@@ -52,10 +65,19 @@ export default function Monitoring() {
         loading={list.loading}
         error={list.error}
         onRetry={list.reload}
-        emptyTitle="No monitoring reports yet"
+        emptyTitle="No post-adoption monitoring records yet"
         searchValue={list.search}
         onSearchChange={list.onSearchChange}
-        filters={[{ key: "status", label: "Status", options: [{ value: "pending", label: "Pending" }, { value: "reviewed", label: "Reviewed" }, { value: "flagged", label: "Flagged" }] }]}
+        filters={[{
+          key: "status",
+          label: "Status",
+          options: [
+            { value: "scheduled", label: "Scheduled" },
+            { value: "pending", label: "Pending review" },
+            { value: "reviewed", label: "Completed" },
+            { value: "flagged", label: "Flagged" },
+          ],
+        }]}
         filterValues={list.filters}
         onFilterChange={list.onFilterChange}
         page={list.pagination.page}
@@ -63,14 +85,14 @@ export default function Monitoring() {
         total={list.pagination.total}
         onPageChange={list.setPage}
         rowActions={(r) =>
-          r.status === "pending" ? (
+          r.status === "pending" && r.submittedAt ? (
             <div className="flex justify-end gap-1">
               <button
                 type="button"
                 disabled={actingOn === r._id}
                 onClick={() => review(r, "reviewed")}
                 className="rounded-lg p-1.5 text-status-success hover:bg-status-successBg disabled:opacity-50"
-                aria-label="Mark reviewed"
+                aria-label="Complete monitoring report"
               >
                 <CheckCircle2 className="h-4 w-4" />
               </button>

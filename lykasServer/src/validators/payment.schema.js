@@ -10,6 +10,6 @@ const createCheckoutSchema = z
   })
   .strict();
 
-const refundSchema = z.object({ reason: z.string().max(500).optional() }).strict();
+const refundSchema = z.object({ reason: z.enum(["duplicate", "fraudulent", "requested_by_customer", "others"]).optional() }).strict();
 
 module.exports = { createCheckoutSchema, refundSchema };

@@ -1,10 +1,22 @@
 const express = require("express");
 const router = express.Router();
+const cloudinary = require("../config/cloudinary");
 const BabyBook = require("../models/BabyBook");
 const Pet = require("../models/Pet");
 const { protect } = require("../middleware/authMiddleware");
 const validateRequest = require("../middleware/validateRequest");
+const { uploadImage } = require("../middleware/uploadMiddleware");
 const { babyBookCreateSchema, babyBookUpdateSchema } = require("../validators/babyBook.schema");
+
+function uploadBufferToCloudinary(buffer, folder) {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream({ folder }, (err, result) => {
+      if (err) return reject(err);
+      resolve(result);
+    });
+    stream.end(buffer);
+  });
+}
 
 const STAFF_ROLES = ["staff", "admin", "super_admin"];
 
@@ -47,28 +59,42 @@ router.get("/entry/:id", protect, async (req, res, next) => {
   }
 });
 
-router.post("/", protect, validateRequest(babyBookCreateSchema), async (req, res, next) => {
+// uploadImage.single("photo") is a no-op when the request isn't
+// multipart/form-data, so this stays backward-compatible with plain
+// JSON entries (text-only) as well as FormData ones that include a photo.
+router.post("/", protect, uploadImage.single("photo"), validateRequest(babyBookCreateSchema), async (req, res, next) => {
   try {
     const pet = await Pet.findById(req.body.pet).select("owner");
     if (!pet) return res.status(404).json({ success: false, message: "Pet not found" });
     if (!isStaff(req.user) && !ownsPet(pet, req.user)) {
       return res.status(403).json({ success: false, message: "You can only add baby book entries for your own pets" });
     }
-    const entry = await BabyBook.create({ ...req.body, addedBy: req.user._id });
+
+    let photoUrl = null;
+    if (req.file) {
+      const result = await uploadBufferToCloudinary(req.file.buffer, "carepaws/baby-book");
+      photoUrl = result.secure_url;
+    }
+
+    const entry = await BabyBook.create({ ...req.body, photoUrl, addedBy: req.user._id });
     res.status(201).json({ success: true, data: entry });
   } catch (err) {
     next(err);
   }
 });
 
-router.put("/entry/:id", protect, validateRequest(babyBookUpdateSchema), async (req, res, next) => {
+router.put("/entry/:id", protect, uploadImage.single("photo"), validateRequest(babyBookUpdateSchema), async (req, res, next) => {
   try {
-    const entry = await BabyBook.findOneAndUpdate(
-      { _id: req.params.id, addedBy: req.user._id },
-      req.body,
-      { new: true, runValidators: true }
-    );
+    const entry = await BabyBook.findOne({ _id: req.params.id, addedBy: req.user._id });
     if (!entry) return res.status(404).json({ success: false, message: "Entry not found" });
+
+    if (req.file) {
+      const result = await uploadBufferToCloudinary(req.file.buffer, "carepaws/baby-book");
+      entry.photoUrl = result.secure_url;
+    }
+
+    Object.assign(entry, req.body);
+    await entry.save();
     res.json({ success: true, data: entry });
   } catch (err) {
     next(err);

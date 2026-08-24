@@ -62,7 +62,9 @@ const updateProfileSchema = z
     phone: z.string().optional(),
     address: z.string().optional(),
     notificationsEnabled: z.boolean().optional(),
-    pushToken: z.string().optional(),
+    // Nullable — the mobile app explicitly PUTs { pushToken: null } to clear
+    // the token server-side when the user disables push notifications.
+    pushToken: z.string().nullable().optional(),
   })
   .strict();
 

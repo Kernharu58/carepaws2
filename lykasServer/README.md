@@ -110,6 +110,24 @@ in Phase 1 of the rebuild; it grows alongside the remaining resource
 routers. Serve it with Swagger UI locally if useful — it's not exposed by
 the running server itself.
 
+## Delete pattern
+
+The default delete pattern across the backend is **soft delete**:
+`Pet`, `User`, `Volunteer`, and `InKindDonation` all carry
+`isDeleted` / `deletedAt` / `deletedBy` fields, and their `DELETE` routes
+set those instead of removing the document, with a corresponding restore
+endpoint to reverse it.
+
+**Exception: `Application` is hard-deleted** (`applicationController.js`'s
+`deleteApplication`, via `Application.findByIdAndDelete`). This is
+deliberate, not an oversight — see the comment on `deleteApplication` for
+the reasoning. In short: an approved application can never be deleted
+(blocked at the route), so only pending/rejected applications ever reach
+the hard-delete path, and those don't carry the same retention need as a
+completed adoption. If that changes, switch `Application` to the same
+soft-delete pattern as the other models rather than inventing a
+one-off mechanism.
+
 ## Notable production fixes vs. the original source
 
 - **Redis is actually wired in** (`src/config/redis.js`) and backs all

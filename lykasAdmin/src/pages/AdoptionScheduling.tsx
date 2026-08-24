@@ -22,11 +22,11 @@ export default function AdoptionScheduling() {
   if (applications.loading) return <LoadingState />;
   if (applications.error) return <ErrorState message={applications.error} onRetry={applications.reload} />;
 
-  const activeApps = applications.rows.filter((a) => a.status === "pending");
+  const activeApps = applications.rows.filter((a) => a.status === "pending" || a.status === "approved");
 
   return (
     <div>
-      <PageHeader title="Adoption Scheduling" description="Pipeline view of applications currently in progress." />
+      <PageHeader title="Adoption Scheduling" description="Pipeline view of applications currently in progress and approved for adoption." />
 
       {activeApps.length === 0 ? (
         <EmptyState title="No applications currently in progress" />

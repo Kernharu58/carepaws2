@@ -50,7 +50,14 @@ api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
 
 const AUTH_FLOW_PATHS = ["/auth/login", "/auth/register", "/auth/google", "/auth/refresh"];
 
-let refreshInFlight: Promise<string | null> | null = null;
+/** The HTTP status code of an error, or undefined if it never got a response (network drop, timeout, DNS failure, etc.). */
+export function getResponseStatus(err: unknown): number | undefined {
+  return axios.isAxiosError(err) ? err.response?.status : undefined;
+}
+
+type RefreshResult = { accessToken: string } | { error: "invalid" | "network" };
+
+let refreshInFlight: Promise<RefreshResult> | null = null;
 let onSessionExpired: (() => void) | null = null;
 
 /** Called once from the root layout so the API client can redirect to login on a hard session failure. */
@@ -58,18 +65,29 @@ export function setSessionExpiredHandler(handler: () => void) {
   onSessionExpired = handler;
 }
 
-async function refreshAccessToken(): Promise<string | null> {
+async function refreshAccessToken(): Promise<RefreshResult> {
   const refreshToken = await tokenStore.getRefreshToken();
-  if (!refreshToken) return null;
+  if (!refreshToken) return { error: "invalid" };
 
   try {
     const res = await axios.post(`${API_URL}/api/auth/refresh`, { refreshToken });
     const { accessToken, refreshToken: newRefreshToken } = res.data.data;
     await tokenStore.setTokens(accessToken, newRefreshToken);
-    return accessToken;
-  } catch {
-    await tokenStore.clear();
-    return null;
+    return { accessToken };
+  } catch (err) {
+    // Only wipe the stored session when the server actually told us the
+    // refresh token is no good (401/403 — expired, revoked, reused, or the
+    // account is no longer active). A network drop, timeout, or 5xx just
+    // means we couldn't ask right now; the refresh token itself may still
+    // be perfectly valid, so keep it and let the next attempt retry once
+    // connectivity is back, instead of forcing a full re-login over what
+    // might be a few seconds of bad signal.
+    const status = getResponseStatus(err);
+    if (status === 401 || status === 403) {
+      await tokenStore.clear();
+      return { error: "invalid" };
+    }
+    return { error: "network" };
   }
 }
 
@@ -92,14 +110,20 @@ api.interceptors.response.use(
         });
       }
 
-      const newToken = await refreshInFlight;
-      if (newToken) {
+      const result = await refreshInFlight;
+      if ("accessToken" in result) {
         original.headers = original.headers ?? {};
-        original.headers.Authorization = `Bearer ${newToken}`;
+        original.headers.Authorization = `Bearer ${result.accessToken}`;
         return api(original);
       }
 
-      onSessionExpired?.();
+      // Only bounce the app to the login screen for a confirmed-invalid
+      // session. On "network", leave the user's local session state alone —
+      // the original error below still surfaces to the caller so this one
+      // request fails, but we don't sign them out over a connectivity blip.
+      if (result.error === "invalid") {
+        onSessionExpired?.();
+      }
     }
 
     return Promise.reject(error);
@@ -115,6 +139,7 @@ export function getApiErrorMessage(err: unknown, fallback = "Something went wron
     }
     if (data?.message) return data.message;
     if (err.code === "ECONNABORTED") return "The request timed out — check your connection and try again.";
+    if (!err.response) return "Can't reach the server — check your internet connection and try again.";
   }
   return fallback;
 }

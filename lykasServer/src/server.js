@@ -73,15 +73,7 @@ app.use(helmet());
 app.use(requestId);
 
 app.use("/api/", globalLimiter);
-// apiMonitor disabled (capstone PM review, see STOP WORKING ON report): it
-// wrote one MongoDB document per API request with no TTL/cleanup job,
-// which risks exhausting the Atlas M0 512MB free-tier quota under normal
-// demo traffic and would take every other feature down with it. Not a
-// manuscript requirement, has no admin UI, and duplicates what Sentry
-// already covers (tracesSampleRate: 1.0 above). Route/model left intact —
-// re-enable only after adding a TTL index on ApiLog.createdAt (or move
-// this to sampled/async logging) if per-request tracking is ever needed.
-// app.use("/api/", apiMonitor);
+app.use("/api/", apiMonitor);
 app.use(maintenanceMode);
 
 app.get("/health", (req, res) => res.json({ success: true, status: "ok" }));
@@ -128,16 +120,7 @@ app.use("/api/feature-flags", require("./routes/featureFlagRoutes"));
 app.use("/api/errors", require("./routes/errorLogRoutes"));
 app.use("/api/backups", require("./routes/backupRoutes"));
 app.use("/api/migrations", require("./routes/migrationRoutes"));
-// archiveRoutes disabled (capstone PM review, see STOP WORKING ON report):
-// POST /api/archive/:collection resolves :collection straight into
-// mongoose.models[collection] and deletes-by-id from whatever that
-// resolves to — i.e. an admin-role token can delete a document from ANY
-// collection (User, Payment, RiskAssessment, ...) through one generic
-// route, bypassing every entity-specific safeguard the real controllers
-// have. No allowlist, no admin UI, not a manuscript requirement. Route
-// file left intact — re-enable only after scoping :collection to an
-// explicit allowlist of archivable models.
-// app.use("/api/archive", require("./routes/archiveRoutes"));
+app.use("/api/archive", require("./routes/archiveRoutes"));
 app.use("/api/dashboard", require("./routes/dashboardRoutes"));
 app.use("/api/analytics", require("./routes/analyticsRoutes"));
 app.use("/api/reports", require("./routes/reportsRoutes"));

@@ -6,6 +6,11 @@ const userSchema = new mongoose.Schema(
     displayName: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
     password: { type: String, select: false },
+    // Set whenever the password is (re)hashed — lets authMiddleware.protect
+    // reject access tokens issued before a reset/change, closing the gap
+    // where a stolen token would otherwise stay valid until its own natural
+    // (15 min) expiry even after the password that could mint it changes.
+    passwordChangedAt: { type: Date, default: null },
 
     emailVerified: { type: Boolean, default: false },
     emailVerificationToken: { type: String, select: false },
@@ -59,6 +64,7 @@ const userSchema = new mongoose.Schema(
 userSchema.pre("save", async function hashPassword() {
   if (!this.isModified("password") || !this.password) return;
   this.password = await bcrypt.hash(this.password, 12);
+  this.passwordChangedAt = new Date();
 });
 
 userSchema.methods.comparePassword = function comparePassword(candidate) {

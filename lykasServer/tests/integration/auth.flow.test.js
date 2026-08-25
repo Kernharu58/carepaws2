@@ -148,4 +148,28 @@ describe("Auth flow", () => {
     // the observable contract of this endpoint for a black-box test.
     expect(user.resetPasswordExpires.getTime()).toBeGreaterThan(Date.now());
   });
+
+  it("rejects an access token issued before the last password change", async () => {
+    const register = await request(app)
+      .post("/api/auth/register")
+      .send({ displayName: "K", email: "k@example.com", password: "password123" });
+
+    const token = register.body.data.accessToken;
+
+    const meBefore = await request(app).get("/api/auth/me").set("Authorization", `Bearer ${token}`);
+    expect(meBefore.status).toBe(200);
+
+    // Simulate a password change happening after the token was issued —
+    // this is exactly what resetPassword() triggers under the hood via
+    // user.save(). Set a couple of seconds in the future (rather than
+    // `new Date()`) so the assertion doesn't depend on the token's `iat`
+    // and this write landing in the same whole-second JWT bucket.
+    const user = await User.findOne({ email: "k@example.com" });
+    user.passwordChangedAt = new Date(Date.now() + 2000);
+    await user.save();
+
+    const meAfter = await request(app).get("/api/auth/me").set("Authorization", `Bearer ${token}`);
+    expect(meAfter.status).toBe(401);
+    expect(meAfter.body.message).toMatch(/password changed/i);
+  });
 });

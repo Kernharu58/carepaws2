@@ -1,12 +1,14 @@
 import { useEffect, useCallback, Component, type ReactNode } from "react";
-import { Stack } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import { View, Text } from "react-native";
+import { View, Text, ActivityIndicator } from "react-native";
 import { useFonts, Fraunces_600SemiBold } from "@expo-google-fonts/fraunces";
 import { DMSans_400Regular, DMSans_500Medium, DMSans_700Bold } from "@expo-google-fonts/dm-sans";
-import { AuthProvider } from "../context/AuthContext";
+import { AuthProvider, useAuth } from "../context/AuthContext";
 import PrimaryButton from "../components/PrimaryButton";
+import colors from "../utils/colors";
+import { getRedirectTarget } from "../utils/routeGuard";
 import "../global.css";
 
 SplashScreen.preventAutoHideAsync();
@@ -49,6 +51,52 @@ class RootErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundary
   }
 }
 
+/**
+ * Centralizes protected-navigation enforcement in one place. Previously
+ * only (tabs)/_layout.tsx guarded anything (redirecting to login when
+ * `!user`), which covers the tab bar screens but not the ~20 other
+ * top-level routes (my-pets, payments, donate, foster-dashboard,
+ * documents, application-details/[id], baby-book/[petId], ...) — a direct
+ * deep link to any of those while logged out bypassed every guard and
+ * rendered the screen shell before its API calls came back 401. This runs
+ * on every segment change and also sends an already-authenticated user
+ * out of the (auth) screens rather than leaving them sitting on the login
+ * form. The actual decision lives in utils/routeGuard.ts so it's unit
+ * tested on its own — see __tests__/route-guard.test.ts.
+ */
+function RootNavigation() {
+  const { user, loading } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
+
+  useEffect(() => {
+    const target = getRedirectTarget({ isAuthenticated: !!user, loading, segments });
+    if (target) router.replace(target);
+  }, [user, loading, segments, router]);
+
+  // Hold every screen — including public ones — behind the splash-style
+  // spinner until session restoration resolves, matching the spinner
+  // (tabs)/_layout.tsx already shows for its own slice of this same
+  // window, so nothing (protected or not) can mount and fire off API
+  // calls before we know whether there's a signed-in user.
+  if (loading) {
+    return (
+      <View className="flex-1 items-center justify-center bg-cream">
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="onboarding" />
+      <Stack.Screen name="(auth)" />
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="+not-found" />
+    </Stack>
+  );
+}
+
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     Fraunces_600SemiBold,
@@ -76,12 +124,7 @@ export default function RootLayout() {
     <RootErrorBoundary>
       <AuthProvider>
         <StatusBar style="dark" />
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="onboarding" />
-          <Stack.Screen name="(auth)" />
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="+not-found" />
-        </Stack>
+        <RootNavigation />
       </AuthProvider>
     </RootErrorBoundary>
   );

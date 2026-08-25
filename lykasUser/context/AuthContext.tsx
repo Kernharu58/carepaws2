@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { api, tokenStore, setSessionExpiredHandler } from "../utils/api";
+import { api, tokenStore, setSessionExpiredHandler, getResponseStatus } from "../utils/api";
 
 export interface AppUser {
   id: string;
@@ -38,8 +38,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const res = await api.get("/api/auth/me");
       setUser(res.data.data.user);
-    } catch {
-      await tokenStore.clear();
+    } catch (err) {
+      // A confirmed 401/403 means the token really is invalid (rejected,
+      // blacklisted, or the account's no longer active) — clear it. But if
+      // /me never got a response at all (app opened with no signal yet, a
+      // timeout, a flaky connection), the interceptor already tried a
+      // silent refresh and left the refresh token alone for exactly this
+      // reason — don't undo that here by wiping it anyway. The person
+      // still lands on the login screen for this launch, but their stored
+      // session survives to restore silently once connectivity is back,
+      // instead of forcing a full password re-entry over a signal blip.
+      const status = getResponseStatus(err);
+      if (status === 401 || status === 403) {
+        await tokenStore.clear();
+      }
       setUser(null);
     } finally {
       setLoading(false);

@@ -1,7 +1,7 @@
 import type { AxiosResponse, InternalAxiosRequestConfig } from "axios";
 import axios, { AxiosError } from "axios";
 import * as SecureStore from "expo-secure-store";
-import { api, tokenStore } from "../utils/api";
+import { api, tokenStore, setSessionExpiredHandler } from "../utils/api";
 
 /**
  * A minimal custom axios adapter so these tests exercise the real
@@ -146,5 +146,73 @@ describe("api response interceptor — 401 refresh-and-retry", () => {
     });
 
     expect(postSpy).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Covers the fix where a network error, timeout, or 5xx while refreshing
+ * was treated the same as the server confirming the refresh token is
+ * invalid — wiping the stored session and forcing a full re-login over
+ * what might be a few seconds of bad signal. Only an actual 401/403
+ * response from POST /api/auth/refresh should do that now.
+ */
+describe("api response interceptor — network failures during refresh don't force a logout", () => {
+  beforeEach(() => {
+    jest.mocked(SecureStore.getItemAsync).mockImplementation((key: string) => {
+      if (key === "carepaws_refresh_token") return Promise.resolve("valid-refresh-token");
+      if (key === "carepaws_access_token") return Promise.resolve("old-access-token");
+      return Promise.resolve(null);
+    });
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("does not clear stored tokens or fire the session-expired handler when the refresh call itself fails on the network", async () => {
+    let meCallCount = 0;
+    const adapter = makeAdapter((config) => {
+      if (config.url === "/api/auth/me") {
+        meCallCount += 1;
+        return { status: 401, data: { success: false, message: "Unauthorized" } };
+      }
+      return { status: 200, data: {} };
+    });
+
+    // No `response` on this error — exactly what a dropped connection,
+    // timeout, or DNS failure looks like to axios, as opposed to a server
+    // actually replying with 401.
+    jest.spyOn(axios, "post").mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+    const clearSpy = jest.spyOn(tokenStore, "clear");
+    const sessionExpired = jest.fn();
+    setSessionExpiredHandler(sessionExpired);
+
+    await expect(api.get("/api/auth/me", { adapter })).rejects.toMatchObject({ response: { status: 401 } });
+
+    expect(meCallCount).toBe(1); // no retry attempted — the refresh never produced a usable token
+    expect(clearSpy).not.toHaveBeenCalled();
+    expect(sessionExpired).not.toHaveBeenCalled();
+  });
+
+  it("still clears stored tokens and fires the session-expired handler when the server confirms the refresh token is invalid", async () => {
+    const adapter = makeAdapter((config) => {
+      if (config.url === "/api/auth/me") return { status: 401, data: { success: false, message: "Unauthorized" } };
+      return { status: 200, data: {} };
+    });
+
+    jest.spyOn(axios, "post").mockRejectedValue(
+      new AxiosError("Request failed with status code 401", AxiosError.ERR_BAD_REQUEST, undefined, undefined, {
+        status: 401,
+        data: { success: false, message: "Invalid or expired refresh token" },
+      } as AxiosResponse)
+    );
+    const clearSpy = jest.spyOn(tokenStore, "clear");
+    const sessionExpired = jest.fn();
+    setSessionExpiredHandler(sessionExpired);
+
+    await expect(api.get("/api/auth/me", { adapter })).rejects.toMatchObject({ response: { status: 401 } });
+
+    expect(clearSpy).toHaveBeenCalled();
+    expect(sessionExpired).toHaveBeenCalled();
   });
 });

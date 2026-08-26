@@ -31,6 +31,21 @@ async function protect(req, res, next) {
       return res.status(403).json({ success: false, message: `Account is ${user.status}` });
     }
 
+    // A password reset revokes refresh-token sessions, but a still-live
+    // access token (up to 15 min) isn't stored anywhere to blacklist by
+    // value. Compare its issue time to the last password change instead —
+    // this closes that window without needing a DB write on every request.
+    // `<` (not `<=`) is deliberate: passwordChangedAt and the token's `iat`
+    // are set moments apart within the same request when a password is
+    // first created, and both get second-truncated, so the freshly-issued
+    // token must never be rejected as its own predecessor.
+    if (user.passwordChangedAt) {
+      const changedAtSeconds = Math.floor(user.passwordChangedAt.getTime() / 1000);
+      if (typeof payload.iat === "number" && payload.iat < changedAtSeconds) {
+        return res.status(401).json({ success: false, message: "Password changed — please log in again" });
+      }
+    }
+
     req.user = user;
     req.token = token;
     next();

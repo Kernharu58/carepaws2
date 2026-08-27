@@ -20,6 +20,7 @@ const jwt = require("jsonwebtoken");
 const connectDB = require("./config/db");
 const { connectRedis } = require("./config/redis");
 const startCronJobs = require("./cronJob");
+const { checkPaymentConfig } = require("./utils/paymentConfigCheck");
 const logger = require("./utils/logger");
 const requestId = require("./middleware/requestId");
 const apiMonitor = require("./middleware/apiMonitorMiddleware");
@@ -231,6 +232,9 @@ const PORT = process.env.PORT || 5000;
 
 async function start() {
   try {
+    const paymentConfigWarning = checkPaymentConfig();
+    if (paymentConfigWarning) logger.warn(paymentConfigWarning);
+
     await connectDB();
     await connectRedis();
     startCronJobs();

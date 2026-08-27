@@ -331,12 +331,20 @@ native build, not Expo Go (see §6).
    ```
    PAYMONGO_SECRET_KEY=sk_test_xxxxxxxxxxxx
    ```
-3. Optionally, for webhook signature verification, set up a webhook
-   endpoint in the PayMongo dashboard pointing at
+3. **Required, not optional** — set up a webhook endpoint in the
+   PayMongo dashboard pointing at
    `https://<your-public-url>/api/payments/webhook`, and set
-   `PAYMONGO_WEBHOOK_SECRET` to the signing secret it gives you. (For
-   local dev, PayMongo can't reach `localhost` — use a tool like `ngrok`
-   to tunnel if you want to test the webhook path specifically.)
+   `PAYMONGO_WEBHOOK_SECRET` to the signing secret it gives you. This
+   isn't just extra signature verification: `webhook()` in
+   `paymentController.js` rejects every event with a 500 when this is
+   unset, and the webhook is the *only* place in the app that ever
+   marks a payment `paid`. Skip this step and every donation, adoption
+   fee, and event fee will charge the donor successfully through
+   PayMongo and then sit as `pending` in CarePaws forever — nothing
+   will ever correct it. (For local dev, PayMongo can't reach
+   `localhost` — use a tool like `ngrok` to tunnel if you want to test
+   the webhook path specifically. For the deployed demo, this must be
+   set in Render's environment variables, not just locally.)
 
 ### Email (verification / password reset)
 Two options — pick one, put it in `lykasServer/.env`:

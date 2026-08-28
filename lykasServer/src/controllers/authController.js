@@ -100,6 +100,22 @@ async function login(req, res, next) {
       return res.status(401).json({ success: false, message: "Invalid email or password" });
     }
 
+    // A soft-deleted account must not be able to log in at all. Without this,
+    // login (unlike refresh() below and authMiddleware.protect()) handed out
+    // a perfectly valid access+refresh token pair for a deleted user — the
+    // token then failed on the very next protected request with 401 "User no
+    // longer exists" from protect(), which the client correctly reads as an
+    // invalid session and force-logs-out. That produced a confusing "logs in
+    // fine, then gets kicked out the moment any real screen loads" loop
+    // instead of a clean rejection at sign-in. Uses the same generic message
+    // as the !user branch above — a deleted account should be no more
+    // distinguishable to an unauthenticated caller than one that never
+    // existed at all.
+    if (user.isDeleted) {
+      await LoginHistory.create({ user: user._id, email, success: false, reason: "no_such_user", ipAddress: req.ip, userAgent: req.headers["user-agent"] });
+      return res.status(401).json({ success: false, message: "Invalid email or password" });
+    }
+
     if (user.isLocked()) {
       await LoginHistory.create({ user: user._id, email, success: false, reason: "account_locked", ipAddress: req.ip, userAgent: req.headers["user-agent"] });
       return res.status(423).json({ success: false, message: "Account is temporarily locked. Try again later." });
@@ -167,6 +183,12 @@ async function googleAuth(req, res, next) {
         emailVerified: true,
         profilePicture: payload.picture,
       });
+    } else if (user.isDeleted) {
+      // Same gap as login() above, reached via the Google path instead: an
+      // existing-but-deleted row means `!user` is false here, so without this
+      // check we'd fall through, flip emailVerified on a deleted account, and
+      // hand out a session that protect() would immediately reject anyway.
+      return res.status(401).json({ success: false, message: "User no longer exists" });
     } else if (!user.emailVerified) {
       user.emailVerified = true;
       await user.save();

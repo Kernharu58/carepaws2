@@ -18,7 +18,7 @@ async function byApplication(req, res, next) {
 // pre-save hook — never accepted from the client (§5.2).
 async function create(req, res, next) {
   try {
-    const application = await Application.findById(req.body.application).select("applicant pet status type");
+    const application = await Application.findById(req.body.application).select("applicant pet status stage type");
     if (!application) return res.status(404).json({ success: false, message: "Application not found" });
     if (application.status === "rejected") return res.status(409).json({ success: false, message: "Cannot assess a rejected application" });
     if (application.stage !== "risk_assessment") {

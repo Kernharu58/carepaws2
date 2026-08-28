@@ -120,7 +120,6 @@ app.use("/api/feature-flags", require("./routes/featureFlagRoutes"));
 app.use("/api/errors", require("./routes/errorLogRoutes"));
 app.use("/api/backups", require("./routes/backupRoutes"));
 app.use("/api/migrations", require("./routes/migrationRoutes"));
-<<<<<<< HEAD
 // Generic archive API is intentionally NOT mounted — it allowed
 // selecting an arbitrary Mongoose model via a URL param
 // (mongoose.models[:collection]), has no caller anywhere in
@@ -128,9 +127,6 @@ app.use("/api/migrations", require("./routes/migrationRoutes"));
 // scope. See the top of routes/archiveRoutes.js for the full writeup
 // and the conditions for safely re-enabling it.
 // app.use("/api/archive", require("./routes/archiveRoutes"));
-=======
-app.use("/api/archive", require("./routes/archiveRoutes"));
->>>>>>> 396d27e99f1965d724dbbbd721bce5f3776f1e8d
 app.use("/api/dashboard", require("./routes/dashboardRoutes"));
 app.use("/api/analytics", require("./routes/analyticsRoutes"));
 app.use("/api/reports", require("./routes/reportsRoutes"));

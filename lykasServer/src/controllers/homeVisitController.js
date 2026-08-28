@@ -14,7 +14,7 @@ async function myHomeVisits(req, res, next) {
 
 async function create(req, res, next) {
   try {
-    const application = await Application.findById(req.body.application).select("applicant pet status type");
+    const application = await Application.findById(req.body.application).select("applicant pet status stage type");
     if (!application) return res.status(404).json({ success: false, message: "Application not found" });
     if (application.status === "rejected") return res.status(409).json({ success: false, message: "Cannot schedule a home visit for a rejected application" });
     if (application.stage !== "home_visit") {

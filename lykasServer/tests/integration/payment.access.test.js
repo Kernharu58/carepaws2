@@ -156,6 +156,7 @@ describe("Payment: create-checkout amount validation", () => {
     expect(res.status).toBe(503);
   });
 });
+<<<<<<< HEAD
 
 // Regression test for the reported bug: opening Payment History showed a
 // spinner, then "Something went wrong — User no longer exists", then force-
@@ -208,3 +209,5 @@ describe("Payment: GET /api/payments/my always resolves (never hangs)", () => {
     expect(res.status).toBe(401);
   });
 });
+=======
+>>>>>>> a184c99c9d56f42b9a2ad9e59e8d9739f6eceb3f

@@ -28,8 +28,17 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
+  // Prevents loadMe() from clearing user immediately after a successful login
+  const [skipLoadMeOnce, setSkipLoadMeOnce] = useState(false);
 
   const loadMe = useCallback(async () => {
+    // If we just logged in, skip the immediate loadMe() call to avoid race condition
+    if (skipLoadMeOnce) {
+      setSkipLoadMeOnce(false);
+      setLoading(false);
+      return;
+    }
+
     const token = await tokenStore.getAccessToken();
     if (!token) {
       setLoading(false);
@@ -56,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [skipLoadMeOnce]);
 
   useEffect(() => {
     loadMe();
@@ -70,6 +79,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { user: newUser, accessToken, refreshToken } = res.data.data;
     await tokenStore.setTokens(accessToken, refreshToken);
     setUser(newUser);
+    // Skip the immediate loadMe() call after registration
+    setSkipLoadMeOnce(true);
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
@@ -77,6 +88,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { user: loggedInUser, accessToken, refreshToken } = res.data.data;
     await tokenStore.setTokens(accessToken, refreshToken);
     setUser(loggedInUser);
+    // Skip the immediate loadMe() call after login to avoid race condition
+    setSkipLoadMeOnce(true);
   }, []);
 
   const loginWithGoogle = useCallback(async (idToken: string) => {
@@ -84,6 +97,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { user: loggedInUser, accessToken, refreshToken } = res.data.data;
     await tokenStore.setTokens(accessToken, refreshToken);
     setUser(loggedInUser);
+    // Skip the immediate loadMe() call after Google login to avoid race condition
+    setSkipLoadMeOnce(true);
   }, []);
 
   const logout = useCallback(async () => {

@@ -12,6 +12,7 @@ interface VerificationRow {
   displayName: string;
   email: string;
   identityVerificationStatus: string;
+  idDocumentUrl?: string | null;
   phone?: string | null;
   address?: string | null;
   phoneVerified: boolean;
@@ -41,6 +42,18 @@ export default function UserVerification() {
     { key: "email", header: "Email", accessor: (u) => u.email },
     { key: "phone", header: "Phone", accessor: (u) => u.phone || "—" },
     { key: "address", header: "Address", accessor: (u) => u.address || "—" },
+    {
+      key: "idDocumentUrl",
+      header: "ID file",
+      accessor: (u) =>
+        u.idDocumentUrl ? (
+          <a href={u.idDocumentUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+            View ID
+          </a>
+        ) : (
+          "—"
+        ),
+    },
     { key: "identityVerificationStatus", header: "ID status", accessor: (u) => <StatusBadge status={u.identityVerificationStatus} /> },
   ];
 

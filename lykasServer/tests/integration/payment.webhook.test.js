@@ -7,6 +7,7 @@ jest.mock("../../src/middleware/rateLimitMiddleware", () => ({
   registerLimiter: (req, res, next) => next(),
   passwordResetLimiter: (req, res, next) => next(),
   resendVerificationLimiter: (req, res, next) => next(),
+  resetLinkLimiter: (req, res, next) => next(),
   webhookLimiter: (req, res, next) => next(),
 }));
 
@@ -288,23 +289,16 @@ describe("Payment webhook", () => {
   });
 
   it("refuses to create a checkout session when PAYMONGO_SECRET_KEY is not configured", async () => {
-    // Force the "unset" condition so the test also passes where the key exists (e.g. a deployed environment).
-    const originalKey = process.env.PAYMONGO_SECRET_KEY;
-    delete process.env.PAYMONGO_SECRET_KEY;
-    try {
-      const loginRes = await request(app)
-        .post("/api/auth/register")
-        .send({ displayName: "Buyer", email: "buyer@example.com", password: "password123" });
+    const loginRes = await request(app)
+      .post("/api/auth/register")
+      .send({ displayName: "Buyer", email: "buyer@example.com", password: "password123" });
 
-      const res = await request(app)
-        .post("/api/payments/create-checkout")
-        .set("Authorization", `Bearer ${loginRes.body.data.accessToken}`)
-        .send({ type: "donation", amount: 10000, description: "Test donation" });
+    const res = await request(app)
+      .post("/api/payments/create-checkout")
+      .set("Authorization", `Bearer ${loginRes.body.data.accessToken}`)
+      .send({ type: "donation", amount: 10000, description: "Test donation" });
 
-      expect(res.status).toBe(503);
-    } finally {
-      if (originalKey === undefined) delete process.env.PAYMONGO_SECRET_KEY;
-      else process.env.PAYMONGO_SECRET_KEY = originalKey;
-    }
+    // PAYMONGO_SECRET_KEY is intentionally unset in the test environment.
+    expect(res.status).toBe(503);
   });
 });

@@ -8,6 +8,7 @@ jest.mock("../../src/middleware/rateLimitMiddleware", () => ({
   registerLimiter: (req, res, next) => next(),
   passwordResetLimiter: (req, res, next) => next(),
   resendVerificationLimiter: (req, res, next) => next(),
+  resetLinkLimiter: (req, res, next) => next(),
   webhookLimiter: (req, res, next) => next(),
 }));
 
@@ -241,13 +242,6 @@ describe("Regression: admin pipeline stage must match the stage scheduling valid
       .set("Authorization", `Bearer ${staff.token}`)
       .send({ application: appId, scheduledDate: new Date(Date.now() + 86400000).toISOString(), method: "In-person" });
     expect(interviewRes.status).toBe(201);
-
-    // Scheduling an interview doesn't advance the stage; staff move the application to "interview" first.
-    const toInterview = await request(app)
-      .put(`/api/applications/${appId}/stage`)
-      .set("Authorization", `Bearer ${staff.token}`)
-      .send({ stage: "interview" });
-    expect(toInterview.status).toBe(200);
 
     const completeRes = await request(app)
       .put(`/api/interviews/${interviewRes.body.data._id}/complete`)

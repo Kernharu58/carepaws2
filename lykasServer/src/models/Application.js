@@ -31,6 +31,8 @@ const applicationSchema = new mongoose.Schema(
     landlordApproval: { type: Boolean, default: false },
     type: { type: String, enum: ["adoption", "foster"], default: "adoption", index: true },
     fosterPeriod: { type: String },
+    // Days the applicant offered to foster (30/45/60 in the app); staff use it to prefill the placement.
+    fosterDays: { type: Number, min: 30, max: 60 },
     status: { type: String, enum: ["pending", "approved", "rejected"], default: "pending", index: true },
     stage: {
       type: String,

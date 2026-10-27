@@ -16,6 +16,8 @@ const applicationCreateSchema = z
     type: z.enum(["adoption", "foster"]).optional(),
     fosterPeriod: z.string().optional(),
     fosterDays: z.number().int().min(30).max(60).optional(),
+    preferredPickupDate: z.string().refine((v) => !Number.isNaN(Date.parse(v)), "Enter a valid date").optional(),
+    preferredPickupMethod: z.enum(["Shelter pickup", "Home delivery"]).optional(),
   })
   .strict();
 

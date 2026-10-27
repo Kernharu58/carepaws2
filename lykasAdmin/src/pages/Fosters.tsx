@@ -34,6 +34,8 @@ interface FosterApplication {
   stage: "approved";
   fosterDays?: number;
   fosterPeriod?: string;
+  preferredPickupDate?: string;
+  preferredPickupMethod?: "Shelter pickup" | "Home delivery";
 }
 
 export default function Fosters() {
@@ -42,7 +44,8 @@ export default function Fosters() {
   const [creating, setCreating] = useState(false);
   const [applications, setApplications] = useState<FosterApplication[]>([]);
   const [applicationId, setApplicationId] = useState("");
-  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+  // Set when the chosen application already has a scheduled pickup; the foster period starts then.
+  const [existingPickup, setExistingPickup] = useState<string | null>(null);
   const [trialDurationDays, setTrialDurationDays] = useState("30");
   const [pickupDate, setPickupDate] = useState("");
   const [pickupMethod, setPickupMethod] = useState("Shelter pickup");
@@ -79,6 +82,7 @@ export default function Fosters() {
     setPickupDate("");
     setPickupMethod("Shelter pickup");
     setPickupLocation("");
+    setExistingPickup(null);
     try {
       const res = await api.get("/api/applications", {
         params: { status: "approved", stage: "approved", type: "foster", limit: 100 },
@@ -94,8 +98,23 @@ export default function Fosters() {
 
   function selectApplication(id: string) {
     setApplicationId(id);
-    const offered = applications.find((item) => item._id === id)?.fosterDays;
-    if (offered && offered >= 30 && offered <= 60) setTrialDurationDays(String(offered));
+    setExistingPickup(null);
+    const application = applications.find((item) => item._id === id);
+    if (!application) return;
+    if (application.fosterDays && application.fosterDays >= 30 && application.fosterDays <= 60) setTrialDurationDays(String(application.fosterDays));
+    // Prefill the pickup with what the applicant asked for (10:00 until staff adjust it).
+    setPickupDate(application.preferredPickupDate ? `${application.preferredPickupDate.slice(0, 10)}T10:00` : "");
+    setPickupMethod(application.preferredPickupMethod ?? "Shelter pickup");
+    // A pickup may already be booked (e.g. from an earlier attempt): reuse it instead of double-booking.
+    api
+      .get("/api/adoption-pickups")
+      .then((res) => {
+        const booked = (res.data.data || []).find(
+          (p: { application: string; status: string; scheduledDate: string }) => String(p.application) === id && p.status === "scheduled"
+        );
+        setExistingPickup(booked?.scheduledDate ?? null);
+      })
+      .catch(() => {});
   }
 
   async function openManageModal(foster: Foster) {
@@ -152,35 +171,37 @@ export default function Fosters() {
       setError("Foster trial duration must be between 30 and 60 days.");
       return;
     }
-    if (pickupDate && pickupMethod === "Home delivery" && !pickupLocation.trim()) {
+    if (!existingPickup && !pickupDate) {
+      setError("Choose the pickup date: the foster period starts when the pet is handed over.");
+      return;
+    }
+    if (!existingPickup && pickupMethod === "Home delivery" && !pickupLocation.trim()) {
       setError("A delivery address is required for home delivery.");
       return;
     }
     setSaving(true);
     setError(null);
     try {
+      // Book the pickup first: the placement can only start once there is one,
+      // and its start date is the handover date.
+      let handover = existingPickup;
+      if (!handover) {
+        const created = await api.post("/api/adoption-pickups", {
+          application: application._id,
+          scheduledDate: new Date(pickupDate).toISOString(),
+          method: pickupMethod,
+          location: pickupLocation.trim() || undefined,
+        });
+        handover = created.data.data.scheduledDate as string;
+      }
       await api.post("/api/foster", {
         application: application._id,
         pet: application.pet._id,
         fosterer: application.applicant._id,
-        startDate: new Date(`${startDate}T00:00:00`).toISOString(),
+        startDate: new Date(handover).toISOString(),
         trialDurationDays: duration,
       });
-      if (pickupDate) {
-        try {
-          await api.post("/api/adoption-pickups", {
-            application: application._id,
-            scheduledDate: pickupDate,
-            method: pickupMethod,
-            location: pickupLocation.trim() || undefined,
-          });
-          showToast("Foster placement started and pickup scheduled", "success");
-        } catch (err) {
-          showToast(`Placement started, but the pickup was not scheduled: ${getApiErrorMessage(err, "unknown error")}`, "error");
-        }
-      } else {
-        showToast("Foster placement started", "success");
-      }
+      showToast("Foster placement started and pickup scheduled", "success");
       setCreating(false);
       list.reload();
     } catch (err) {
@@ -244,9 +265,6 @@ export default function Fosters() {
               ))}
             </Select>
           </FormField>
-          <FormField label="Start date" htmlFor="foster-start-date">
-            <Input id="foster-start-date" type="date" required value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-          </FormField>
           <FormField label="Trial duration (days)" htmlFor="foster-duration">
             <Input id="foster-duration" type="number" min={30} max={60} required value={trialDurationDays} onChange={(e) => setTrialDurationDays(e.target.value)} />
           </FormField>
@@ -259,11 +277,21 @@ export default function Fosters() {
                   : "Applicant did not state a period."}
             </p>
           )}
-          <p className="mb-2 mt-4 text-sm font-semibold text-gray-700">Pet pickup (optional)</p>
-          <FormField label="Pickup date & time" htmlFor="foster-pickup-date">
-            <Input id="foster-pickup-date" type="datetime-local" value={pickupDate} onChange={(e) => setPickupDate(e.target.value)} />
-          </FormField>
-          {pickupDate && (
+          <p className="mb-2 mt-4 text-sm font-semibold text-gray-700">Pet pickup</p>
+          {selectedApplication?.preferredPickupDate && !existingPickup && (
+            <p className="mb-2 text-xs text-gray-500">
+              Applicant requested {new Date(selectedApplication.preferredPickupDate).toLocaleDateString(undefined, { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" })}
+              {selectedApplication.preferredPickupMethod ? ` · ${selectedApplication.preferredPickupMethod}` : ""}.
+            </p>
+          )}
+          {existingPickup ? (
+            <Alert tone="info">A pickup is already scheduled for {new Date(existingPickup).toLocaleString()}. The foster period starts then.</Alert>
+          ) : (
+            <FormField label="Pickup date & time (the foster period starts then)" htmlFor="foster-pickup-date">
+              <Input id="foster-pickup-date" type="datetime-local" required value={pickupDate} onChange={(e) => setPickupDate(e.target.value)} />
+            </FormField>
+          )}
+          {!existingPickup && pickupDate && (
             <>
               <FormField label="Method" htmlFor="foster-pickup-method">
                 <Select id="foster-pickup-method" value={pickupMethod} onChange={(e) => setPickupMethod(e.target.value)}>

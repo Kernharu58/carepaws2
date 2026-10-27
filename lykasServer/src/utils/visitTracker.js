@@ -30,4 +30,9 @@ function recordVisit(user) {
   });
 }
 
-module.exports = { recordVisit, dayKey };
+/** YYYY-MM-DD (Manila time) of any date, for comparing calendar days. */
+function dayOf(date) {
+  return formatter.format(new Date(date));
+}
+
+module.exports = { recordVisit, dayKey, dayOf };

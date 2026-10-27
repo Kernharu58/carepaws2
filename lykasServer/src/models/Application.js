@@ -33,6 +33,9 @@ const applicationSchema = new mongoose.Schema(
     fosterPeriod: { type: String },
     // Days the applicant offered to foster (30/45/60 in the app); staff use it to prefill the placement.
     fosterDays: { type: Number, min: 30, max: 60 },
+    // When/how the applicant would like to receive the pet. A request only: staff schedule the actual pickup.
+    preferredPickupDate: { type: Date },
+    preferredPickupMethod: { type: String, enum: ["Shelter pickup", "Home delivery"] },
     status: { type: String, enum: ["pending", "approved", "rejected"], default: "pending", index: true },
     stage: {
       type: String,

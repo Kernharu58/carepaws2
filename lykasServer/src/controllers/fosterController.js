@@ -1,6 +1,8 @@
 const { Foster, WeeklyFosterReport, getFosterReportDueDate } = require("../models/Foster");
 const Pet = require("../models/Pet");
 const Application = require("../models/Application");
+const AdoptionPickup = require("../models/AdoptionPickup");
+const { dayOf } = require("../utils/visitTracker");
 const { notifyOnce } = require("../utils/notificationHelper");
 
 // The original trial is 30-60 days; staff may add at most this many days on top, in total.
@@ -85,6 +87,16 @@ async function create(req, res, next) {
     const startDate = new Date(req.body.startDate);
     if (Number.isNaN(startDate.getTime())) {
       return res.status(400).json({ success: false, message: "Invalid foster start date" });
+    }
+
+    // The foster period begins when the pet is handed over, so a pickup must be
+    // booked first and the period can't start before it.
+    const pickup = await AdoptionPickup.findOne({ application: application._id, status: { $in: ["scheduled", "completed"] } }).sort({ scheduledDate: -1 });
+    if (!pickup) {
+      return res.status(409).json({ success: false, message: "Schedule the pet pickup before starting the foster placement" });
+    }
+    if (dayOf(startDate) < dayOf(pickup.scheduledDate)) {
+      return res.status(409).json({ success: false, message: "The foster period can't start before the pet is picked up" });
     }
 
     let trialDurationDays = req.body.trialDurationDays;

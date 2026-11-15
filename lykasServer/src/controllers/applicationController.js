@@ -46,6 +46,18 @@ function assertStageTransition(application, nextStage) {
   }
 }
 
+/**
+ * Pet fields to set when an application is approved. A foster approval makes the
+ * applicant the temporary caregiver only; the shelter stays the owner until an
+ * adoption is finalized (an adoption approval, or a foster ending as ADOPTED).
+ */
+function petStateForApproval(application) {
+  if (application.type === "foster") {
+    return { status: "Foster", currentFosterer: application.applicant, owner: null };
+  }
+  return { status: "Adopted", owner: application.applicant, currentFosterer: null };
+}
+
 async function advanceApplicationStage(application, nextStage, changedBy, note) {
   assertStageTransition(application, nextStage);
   application.stage = nextStage;
@@ -233,12 +245,9 @@ async function updateStatus(req, res, next) {
     });
 
     if (nextStatus === "approved") {
-      await Pet.findByIdAndUpdate(application.pet, {
-        status: application.type === "foster" ? "Foster" : "Adopted",
-        owner: application.applicant,
-      });
+      await Pet.findByIdAndUpdate(application.pet, petStateForApproval(application));
     } else {
-      await Pet.findByIdAndUpdate(application.pet, { status: "Available", owner: null });
+      await Pet.findByIdAndUpdate(application.pet, { status: "Available", owner: null, currentFosterer: null });
     }
 
     await writeAuditLog({
@@ -278,12 +287,9 @@ async function updateStage(req, res, next) {
     await advanceApplicationStage(application, nextStage, req.user._id, req.body.note);
 
     if (nextStage === "approved") {
-      await Pet.findByIdAndUpdate(application.pet, {
-        status: application.type === "foster" ? "Foster" : "Adopted",
-        owner: application.applicant,
-      });
+      await Pet.findByIdAndUpdate(application.pet, petStateForApproval(application));
     } else if (nextStage === "rejected") {
-      await Pet.findByIdAndUpdate(application.pet, { status: "Available", owner: null });
+      await Pet.findByIdAndUpdate(application.pet, { status: "Available", owner: null, currentFosterer: null });
     }
 
     await writeAuditLog({
@@ -357,7 +363,7 @@ async function deleteApplication(req, res, next) {
     await Application.findByIdAndDelete(application._id);
 
     if (application.status === "pending") {
-      await Pet.findByIdAndUpdate(application.pet, { status: "Available", owner: null });
+      await Pet.findByIdAndUpdate(application.pet, { status: "Available", owner: null, currentFosterer: null });
     }
 
     await writeAuditLog({ actor: req.user._id, action: "application.delete", entityType: "Application", entityId: application._id, req });

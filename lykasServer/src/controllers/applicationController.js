@@ -158,12 +158,14 @@ async function createApplication(req, res, next) {
     // silently attributed to the staff member's own account.
     const isStaff = ["staff", "admin", "super_admin"].includes(req.user.role);
     let applicantId = req.user._id;
+    let applicantDoc = req.user;
     if (isStaff && req.body.applicant) {
       const applicantUser = await User.findOne({ _id: req.body.applicant, isDeleted: { $ne: true } });
       if (!applicantUser) {
         return res.status(404).json({ success: false, message: "Applicant not found" });
       }
       applicantId = applicantUser._id;
+      applicantDoc = applicantUser;
     }
 
     const activeApplication = await Application.findOne({
@@ -177,6 +179,8 @@ async function createApplication(req, res, next) {
     const { applicant: _ignoredApplicant, ...applicationFields } = req.body;
     const application = await Application.create({
       ...applicationFields,
+      // Taken from the saved profile, never from the request body.
+      landlordProofUrl: applicationFields.isRenting ? applicantDoc.landlordProofUrl || null : null,
       applicant: applicantId,
       stageHistory: [{ stage: "submitted", changedBy: req.user._id, note: "Application submitted" }],
     });

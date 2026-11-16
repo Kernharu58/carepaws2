@@ -4,6 +4,10 @@ const User = require("../models/User");
 const { buildListQuery, buildSort, buildPagination } = require("../utils/queryBuilder");
 const { writeAuditLog } = require("../utils/auditLogger");
 const { notifyOnce } = require("../utils/notificationHelper");
+const identityService = require("../services/identityVerificationService");
+
+// Stages that need a verified identity (everything past the initial submission).
+const STAGES_NOT_REQUIRING_IDENTITY = ["submitted", "rejected"];
 
 const SEARCH_FIELDS = ["address", "experience"];
 const FILTER_FIELDS = ["status", "stage", "type", "pet", "applicant"];
@@ -60,6 +64,14 @@ function petStateForApproval(application) {
 
 async function advanceApplicationStage(application, nextStage, changedBy, note) {
   assertStageTransition(application, nextStage);
+  // Identity is re-checked on every advance (not just at submission): an ID can
+  // expire or be revoked while an application is in progress. Rejecting an
+  // application never requires identity.
+  if (!STAGES_NOT_REQUIRING_IDENTITY.includes(nextStage)) {
+    const applicant = await User.findById(application.applicant);
+    if (!applicant) throw Object.assign(new Error("Applicant account not found"), { statusCode: 409 });
+    await identityService.assertEligible(applicant, application.type, { stage: "advance", forStaff: true });
+  }
   application.stage = nextStage;
   if (nextStage === "approved") {
     application.status = "approved";
@@ -168,6 +180,26 @@ async function createApplication(req, res, next) {
       applicantDoc = applicantUser;
     }
 
+    // Identity verification is evaluated server-side from the applicant's
+    // authoritative ID record - never from anything the client sent. Staff
+    // recording a walk-in application are held to the same rule: the applicant
+    // must already have a verified ID (see docs/IDENTITY_VERIFICATION.md for
+    // the staff-assisted walk-in process). Email verification is checked
+    // separately by requireVerifiedEmail on the route.
+    const applicationType = req.body.type === "foster" ? "foster" : "adoption";
+    let identityCheck;
+    try {
+      identityCheck = await identityService.assertEligible(applicantDoc, applicationType, {
+        stage: "submit",
+        forStaff: String(applicantId) !== String(req.user._id),
+      });
+    } catch (err) {
+      if (err instanceof identityService.IdentityError) {
+        return res.status(err.statusCode).json({ success: false, code: err.code, message: err.message, identityStatus: err.identityStatus });
+      }
+      throw err;
+    }
+
     const activeApplication = await Application.findOne({
       pet: pet._id,
       status: { $in: ["pending", "approved"] },
@@ -182,6 +214,12 @@ async function createApplication(req, res, next) {
       // Taken from the saved profile, never from the request body.
       landlordProofUrl: applicationFields.isRenting ? applicantDoc.landlordProofUrl || null : null,
       applicant: applicantId,
+      identityCheck: {
+        status: identityCheck.identity.status,
+        document: identityCheck.identity.documentId,
+        policy: identityCheck.policy,
+        checkedAt: new Date(),
+      },
       stageHistory: [{ stage: "submitted", changedBy: req.user._id, note: "Application submitted" }],
     });
     await application.populate(APPLICATION_POPULATE);
@@ -267,7 +305,7 @@ async function updateStatus(req, res, next) {
     await application.populate(APPLICATION_POPULATE);
     return res.json({ success: true, data: application });
   } catch (err) {
-    if (err?.statusCode) return res.status(err.statusCode).json({ success: false, message: err.message });
+    if (err?.statusCode) return res.status(err.statusCode).json({ success: false, message: err.message, code: err.code, identityStatus: err.identityStatus });
     next(err);
   }
 }
@@ -309,7 +347,7 @@ async function updateStage(req, res, next) {
     await application.populate(APPLICATION_POPULATE);
     return res.json({ success: true, data: application });
   } catch (err) {
-    if (err?.statusCode) return res.status(err.statusCode).json({ success: false, message: err.message });
+    if (err?.statusCode) return res.status(err.statusCode).json({ success: false, message: err.message, code: err.code, identityStatus: err.identityStatus });
     next(err);
   }
 }

@@ -9,5 +9,5 @@ export interface AdminUser {
   status: UserStatus;
   emailVerified: boolean;
   profilePicture: string | null;
-  identityVerificationStatus: "unverified" | "pending" | "verified" | "rejected";
+  identityVerificationStatus: "unverified" | "pending" | "verified" | "rejected" | "resubmission_required" | "expired";
 }

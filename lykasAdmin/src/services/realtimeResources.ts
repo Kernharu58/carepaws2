@@ -23,6 +23,7 @@ const ENDPOINT_RESOURCES: [prefix: string, resources: string[]][] = [
   ["/api/events", ["Event", "EventRegistration", "EventVolunteerAssignment"]],
   ["/api/inventory", ["InventoryItem"]],
   ["/api/documents", ["UserDocument"]],
+  ["/api/identity", ["UserDocument", "User"]],
   ["/api/volunteers", ["Volunteer"]],
   ["/api/monitoring-reports", ["MonitoringReport"]],
   ["/api/foster", ["Foster", "WeeklyFosterReport"]],

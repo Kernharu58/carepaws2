@@ -21,7 +21,7 @@ const { notifyOnce } = require("../../src/utils/notificationHelper");
 async function registerAndLogin(email, role = "user") {
   const res = await request(app)
     .post("/api/auth/register")
-    .send({ displayName: "Notification Test", email, password: "password123" });
+    .send({ acceptedTerms: true, displayName: "Notification Test", email, password: "password123" });
 
   // These suites exercise actions gated by requireVerifiedEmail; verification itself is covered in emailVerification.test.js.
   await User.findOneAndUpdate({ email }, { emailVerified: true });

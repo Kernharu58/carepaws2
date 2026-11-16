@@ -143,6 +143,7 @@ app.use("/api/email-templates", require("./routes/emailTemplateRoutes"));
 app.use("/api/donations/goods", require("./routes/inKindDonationRoutes"));
 app.use("/api/files", require("./routes/fileAssetRoutes"));
 app.use("/api/documents", require("./routes/userDocumentRoutes"));
+app.use("/api/identity", require("./routes/identityRoutes"));
 app.use("/api/scheduled-jobs", require("./routes/scheduledJobRoutes"));
 app.use("/api/audit-logs", require("./routes/auditLogRoutes"));
 app.use("/api/settings", require("./routes/settingsRoutes"));

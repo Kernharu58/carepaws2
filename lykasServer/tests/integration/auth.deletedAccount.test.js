@@ -48,7 +48,7 @@ describe("Deleted accounts cannot obtain or use a session", () => {
   it("login rejects a soft-deleted account the same way it rejects a nonexistent one, and issues no tokens", async () => {
     const reg = await request(app)
       .post("/api/auth/register")
-      .send({ displayName: "Deleted User", email: "deleted@example.com", password: "password123" });
+      .send({ acceptedTerms: true, displayName: "Deleted User", email: "deleted@example.com", password: "password123" });
     expect(reg.status).toBe(201);
 
     await User.findOneAndUpdate({ email: "deleted@example.com" }, { isDeleted: true });
@@ -66,7 +66,7 @@ describe("Deleted accounts cannot obtain or use a session", () => {
   it("googleAuth rejects a soft-deleted account instead of issuing it a session", async () => {
     const reg = await request(app)
       .post("/api/auth/register")
-      .send({ displayName: "Deleted Googler", email: "deleted-google@example.com", password: "password123" });
+      .send({ acceptedTerms: true, displayName: "Deleted Googler", email: "deleted-google@example.com", password: "password123" });
     expect(reg.status).toBe(201);
 
     await User.findOneAndUpdate({ email: "deleted-google@example.com" }, { isDeleted: true });
@@ -82,7 +82,7 @@ describe("Deleted accounts cannot obtain or use a session", () => {
   it("does not resurrect a deleted account's data as a side effect of a rejected Google sign-in attempt", async () => {
     const reg = await request(app)
       .post("/api/auth/register")
-      .send({ displayName: "Deleted Googler Two", email: "deleted-google-2@example.com", password: "password123" });
+      .send({ acceptedTerms: true, displayName: "Deleted Googler Two", email: "deleted-google-2@example.com", password: "password123" });
     await User.findOneAndUpdate({ email: "deleted-google-2@example.com" }, { isDeleted: true, emailVerified: false });
     verifyIdToken.mockResolvedValue({ getPayload: () => ({ email: "deleted-google-2@example.com" }) });
 
@@ -96,7 +96,7 @@ describe("Deleted accounts cannot obtain or use a session", () => {
   it("a token that was genuinely valid when issued stops working the moment the account is deleted — cleanly (401), not by hanging", async () => {
     const reg = await request(app)
       .post("/api/auth/register")
-      .send({ displayName: "Soon Deleted", email: "soon-deleted@example.com", password: "password123" });
+      .send({ acceptedTerms: true, displayName: "Soon Deleted", email: "soon-deleted@example.com", password: "password123" });
     const token = reg.body.data.accessToken;
 
     const before = await request(app).get("/api/auth/me").set("Authorization", `Bearer ${token}`);
@@ -112,7 +112,7 @@ describe("Deleted accounts cannot obtain or use a session", () => {
   it("a healthy, active account can still log in normally (the fix does not block real users)", async () => {
     await request(app)
       .post("/api/auth/register")
-      .send({ displayName: "Still Fine", email: "still-fine@example.com", password: "password123" });
+      .send({ acceptedTerms: true, displayName: "Still Fine", email: "still-fine@example.com", password: "password123" });
 
     const res = await request(app)
       .post("/api/auth/login")

@@ -54,9 +54,15 @@ export default function ProfileScreen() {
             <Text className="font-sans text-sm text-muted" numberOfLines={1}>
               {user?.email}
             </Text>
-            <View className="mt-1 flex-row">
+            <Pressable testID="profile-identity-status" onPress={() => router.push("/documents")} accessibilityRole="button" accessibilityLabel="Identity verification status" className="mt-1 flex-row items-center gap-2">
+              <Text className="font-sans text-xs text-muted">ID</Text>
               <StatusBadge status={user?.identityVerificationStatus ?? "unverified"} />
-            </View>
+              {user?.identityVerificationStatus && user.identityVerificationStatus !== "verified" && user.identityVerificationStatus !== "pending" && (
+                <Text testID="profile-identity-action" className="font-sans text-xs text-primary">
+                  {user.identityVerificationStatus === "unverified" ? "Verify ID" : "Action needed"}
+                </Text>
+              )}
+            </Pressable>
           </View>
         </View>
 

@@ -11,6 +11,7 @@ const STATUS_TONE_MAP: Record<string, StatusTone> = {
   verified: "success",
 
   pending: "warning",
+  resubmission_required: "warning",
   scheduled: "warning",
   in_review: "warning",
 
@@ -19,7 +20,9 @@ const STATUS_TONE_MAP: Record<string, StatusTone> = {
   rejected: "danger",
   cancelled: "danger",
   failed: "danger",
+  expired: "danger",
 
+  unverified: "neutral",
   inactive: "neutral",
   archived: "neutral",
 };

@@ -10,6 +10,7 @@ const NOTIFICATION_TYPES = [
   "EVENT_CREATED", "EVENT_REMINDER", "EVENT_CANCELLED", "EVENT_REGISTRATION", "VOLUNTEER_SHIFT", "EMERGENCY_REPORT_UPDATE", "CHAT_MESSAGE",
   "VACCINATION_DUE", "HEALTH_CHECK_FLAGGED",
   "IN_KIND_DONATION_STATUS", "PAYMENT_PENDING", "PAYMENT_RECEIVED", "PAYMENT_FAILED", "PAYMENT_REFUNDED", "PAYMENT_CANCELLED",
+  "IDENTITY_SUBMITTED", "IDENTITY_VERIFIED", "IDENTITY_REJECTED", "IDENTITY_RESUBMISSION_REQUIRED", "IDENTITY_EXPIRED", "IDENTITY_EXPIRING_SOON",
   "GENERAL",
 ];
 
@@ -22,7 +23,7 @@ const notificationSchema = new mongoose.Schema(
     message: { type: String, required: true },
     refModel: {
       type: String,
-      enum: ["Application", "Interview", "HomeVisit", "AdoptionPickup", "Foster", "MonitoringReport", "Event", "Pet", "Payment", "InKindDonation", "EmergencyReport", null],
+      enum: ["Application", "Interview", "HomeVisit", "AdoptionPickup", "Foster", "MonitoringReport", "Event", "Pet", "Payment", "InKindDonation", "EmergencyReport", "UserDocument", null],
       default: null,
     },
     refId: { type: mongoose.Schema.Types.ObjectId, default: null },

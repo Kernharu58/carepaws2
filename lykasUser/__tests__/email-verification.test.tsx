@@ -186,7 +186,8 @@ describe("EMAIL_NOT_VERIFIED prompt", () => {
     await waitFor(() => expect(screen.getByText("Apply to foster Bella")).toBeTruthy());
     fireEvent.press(screen.getByText("Apply to foster Bella"));
 
-    expect(mockPush).toHaveBeenCalledWith("/pets/apply/pet1?type=foster");
+    // The identity pre-check is asynchronous now, so navigation follows a tick later.
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/pets/apply/pet1?type=foster"));
     expect(Alert.alert).not.toHaveBeenCalled();
   });
 });

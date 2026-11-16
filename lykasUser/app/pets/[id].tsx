@@ -12,6 +12,7 @@ import StatusBadge from "../../components/StatusBadge";
 import PrimaryButton from "../../components/PrimaryButton";
 import PetVideoPlayer, { type PetVideoInfo } from "../../components/PetVideoPlayer";
 import { needsEmailVerification, promptVerifyEmail } from "../../utils/emailVerification";
+import { ensureIdentityBeforeApplying } from "../../utils/identity";
 import colors from "../../utils/colors";
 
 interface PetDetail {
@@ -94,11 +95,14 @@ export default function PetDetailScreen() {
 
   // Applying (adoption or foster) requires a verified email: prompt here
   // instead of letting the form fail on submit.
-  function startApplication(path: string) {
+  async function startApplication(path: string) {
     if (needsEmailVerification(user)) {
       promptVerifyEmail();
       return;
     }
+    // Identity verification is a separate requirement from email. This is a
+    // friendly pre-check only; the server enforces it on submit.
+    if (user?.role === "user" && !(await ensureIdentityBeforeApplying(path.includes("type=foster") ? "foster" : "adoption"))) return;
     router.push(path);
   }
 

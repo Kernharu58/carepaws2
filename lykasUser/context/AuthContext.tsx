@@ -12,7 +12,7 @@ export interface AppUser {
   status: "active" | "suspended" | "locked";
   emailVerified: boolean;
   profilePicture: string | null;
-  identityVerificationStatus: "unverified" | "pending" | "verified" | "rejected";
+  identityVerificationStatus: "unverified" | "pending" | "verified" | "rejected" | "resubmission_required" | "expired";
   notificationsEnabled: boolean;
   phone?: string | null;
   address?: string | null;

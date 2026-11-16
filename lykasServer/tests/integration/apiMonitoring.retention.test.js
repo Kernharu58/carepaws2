@@ -151,7 +151,7 @@ describe("GET /api/monitoring/api/summary — regression check (still works afte
   async function registerAndLogin(email, role) {
     const res = await request(app)
       .post("/api/auth/register")
-      .send({ displayName: "Test " + role, email, password: "password123" });
+      .send({ acceptedTerms: true, displayName: "Test " + role, email, password: "password123" });
     await User.findOneAndUpdate({ email }, { role });
     const loginRes = await request(app).post("/api/auth/login").send({ email, password: "password123" });
     return { token: loginRes.body.data.accessToken };

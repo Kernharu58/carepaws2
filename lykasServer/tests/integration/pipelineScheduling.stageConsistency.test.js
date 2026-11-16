@@ -14,6 +14,7 @@ jest.mock("../../src/middleware/rateLimitMiddleware", () => ({
 
 const { app } = require("../../src/server");
 const User = require("../../src/models/User");
+const { markIdentityVerified } = require("../helpers/identity");
 const Pet = require("../../src/models/Pet");
 const Application = require("../../src/models/Application");
 const UserDocument = require("../../src/models/UserDocument");
@@ -21,10 +22,12 @@ const UserDocument = require("../../src/models/UserDocument");
 async function registerAndLogin(email, role = "user") {
   const res = await request(app)
     .post("/api/auth/register")
-    .send({ displayName: "Test " + role, email, password: "password123" });
+    .send({ acceptedTerms: true, displayName: "Test " + role, email, password: "password123" });
 
   // These suites exercise actions gated by requireVerifiedEmail; verification itself is covered in emailVerification.test.js.
   await User.findOneAndUpdate({ email }, { emailVerified: true });
+  // Applications now require a genuinely verified identity (see identity.verification tests).
+  await markIdentityVerified(email);
 
   if (role !== "user") {
     await User.findOneAndUpdate({ email }, { role });
@@ -159,7 +162,7 @@ describe("Regression: admin pipeline stage must match the stage scheduling valid
     await UserDocument.create({
       user: applicant.user.id,
       application: application._id,
-      type: "government_id",
+      type: "proof_of_address",
       fileUrl: "https://example.com/doc.jpg",
       status: "verified",
     });
@@ -232,7 +235,7 @@ describe("Regression: admin pipeline stage must match the stage scheduling valid
     await UserDocument.create({
       user: applicant.user.id,
       application: appId,
-      type: "government_id",
+      type: "proof_of_address",
       fileUrl: "https://example.com/doc.jpg",
       status: "verified",
     });

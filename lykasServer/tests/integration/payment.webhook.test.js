@@ -291,7 +291,7 @@ describe("Payment webhook", () => {
   it("refuses to create a checkout session when PAYMONGO_SECRET_KEY is not configured", async () => {
     const loginRes = await request(app)
       .post("/api/auth/register")
-      .send({ displayName: "Buyer", email: "buyer@example.com", password: "password123" });
+      .send({ acceptedTerms: true, displayName: "Buyer", email: "buyer@example.com", password: "password123" });
 
     const res = await request(app)
       .post("/api/payments/create-checkout")

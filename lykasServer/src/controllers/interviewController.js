@@ -22,7 +22,7 @@ async function create(req, res, next) {
       return res.status(409).json({ success: false, message: "Application must be in document review before an interview can be scheduled" });
     }
 
-    const documents = await UserDocument.find({ application: application._id }).select("status");
+    const documents = await UserDocument.find({ application: application._id, type: { $ne: "government_id" } }).select("status");
     if (documents.length === 0) {
       return res.status(409).json({ success: false, message: "At least one application document must be uploaded and verified before the interview" });
     }

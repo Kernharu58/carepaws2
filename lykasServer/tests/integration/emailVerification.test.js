@@ -22,6 +22,7 @@ jest.mock("../../src/utils/emailService", () => ({
 
 const { app } = require("../../src/server");
 const User = require("../../src/models/User");
+const { markIdentityVerified } = require("../helpers/identity");
 const Pet = require("../../src/models/Pet");
 const { sendTemplatedEmail } = require("../../src/utils/emailService");
 const { requireVerifiedEmail } = require("../../src/middleware/authMiddleware");
@@ -32,7 +33,7 @@ function lastToken() {
 }
 
 async function register(email = "member@example.com") {
-  const res = await request(app).post("/api/auth/register").send({ displayName: "Member", email, password: "password123" });
+  const res = await request(app).post("/api/auth/register").send({ acceptedTerms: true, displayName: "Member", email, password: "password123" });
   return { res, token: res.body.data?.accessToken };
 }
 
@@ -212,6 +213,8 @@ describe("gated and exempt routes for an unverified member", () => {
 
   it("lets an application through once the email is verified", async () => {
     await User.updateOne({ email: "member@example.com" }, { emailVerified: true });
+    // Identity is a separate requirement from email; this test is about email only.
+    await markIdentityVerified("member@example.com");
     const res = await post("/api/applications", token).send({ pet: pet._id.toString(), phone: "0917000000", address: "123 Main St" });
     expect(res.status).toBe(201);
   });

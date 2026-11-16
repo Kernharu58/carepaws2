@@ -1,5 +1,19 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
+const { IDENTITY_STATUSES } = require("../config/identity");
+
+// Fields that make up the identity-verification state. Only the identity
+// service may change them; every other writer is rejected below.
+const IDENTITY_FIELDS = [
+  "identityVerificationStatus",
+  "identityDocument",
+  "identityVerifiedBy",
+  "identityVerifiedAt",
+  "identityExpiresAt",
+  "identityVerificationNotes",
+];
+// Option key the identity service passes on its own update queries.
+const IDENTITY_WRITE_OPTION = "identityServiceWrite";
 
 const userSchema = new mongoose.Schema(
   {
@@ -61,13 +75,21 @@ const userSchema = new mongoose.Schema(
     // Photo of the landlord's written OK for pets, so staff can check it.
     landlordProofUrl: { type: String, default: null },
 
+    // Identity verification (government ID). Independent of emailVerified.
+    // This is a cache derived from the ONE authoritative government-ID
+    // UserDocument referenced by `identityDocument`; it is only ever written
+    // by services/identityVerificationService.js (guarded below).
     identityVerificationStatus: {
       type: String,
-      enum: ["unverified", "pending", "verified", "rejected"],
+      enum: IDENTITY_STATUSES,
       default: "unverified",
     },
+    identityDocument: { type: mongoose.Schema.Types.ObjectId, ref: "UserDocument", default: null },
     identityVerifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     identityVerifiedAt: { type: Date, default: null },
+    // Expiry of the authoritative document, denormalised for cheap checks.
+    identityExpiresAt: { type: Date, default: null },
+    // Reason shown to the applicant after a rejection / resubmission request.
     identityVerificationNotes: { type: String, default: null },
 
     isDeleted: { type: Boolean, default: false, index: true },
@@ -76,6 +98,42 @@ const userSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Defence in depth: the REST layer already has no direct "set status" endpoint,
+// but a future code path must not be able to mark someone verified by saving a
+// User document or running a bare update either.
+userSchema.pre("save", function guardIdentityFields() {
+  if (this.isNew) {
+    // New accounts always start unverified, whatever the caller supplied.
+    if (this.identityVerificationStatus !== "unverified" && !this.$locals?.identityServiceWrite) {
+      this.identityVerificationStatus = "unverified";
+      this.identityDocument = null;
+      this.identityVerifiedBy = null;
+      this.identityVerifiedAt = null;
+      this.identityExpiresAt = null;
+    }
+    return;
+  }
+  if (this.$locals?.identityServiceWrite) return;
+  const touched = IDENTITY_FIELDS.filter((f) => this.isModified(f));
+  if (touched.length > 0) {
+    throw Object.assign(new Error("Identity verification fields can only be changed through the identity verification service"), { statusCode: 403 });
+  }
+});
+
+function guardIdentityUpdate() {
+  if (this.getOptions()[IDENTITY_WRITE_OPTION] === true) return;
+  const update = this.getUpdate() || {};
+  const flat = [update, update.$set, update.$unset, update.$setOnInsert].filter(Boolean);
+  for (const part of flat) {
+    for (const key of Object.keys(part)) {
+      if (IDENTITY_FIELDS.includes(key)) {
+        throw Object.assign(new Error("Identity verification fields can only be changed through the identity verification service"), { statusCode: 403 });
+      }
+    }
+  }
+}
+for (const op of ["updateOne", "updateMany", "findOneAndUpdate"]) userSchema.pre(op, guardIdentityUpdate);
 
 userSchema.pre("save", async function hashPassword() {
   if (!this.isModified("password") || !this.password) return;
@@ -92,4 +150,6 @@ userSchema.methods.isLocked = function isLocked() {
   return this.status === "locked" && this.lockedUntil && this.lockedUntil > new Date();
 };
 
-module.exports = mongoose.model("User", userSchema);
+const User = mongoose.model("User", userSchema);
+User.IDENTITY_WRITE_OPTION = IDENTITY_WRITE_OPTION;
+module.exports = User;

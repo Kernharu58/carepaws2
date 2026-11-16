@@ -22,10 +22,11 @@ export interface NotificationMeta {
   bg: string;
 }
 
-const GOOD = /(APPROVED|COMPLETED|RECEIVED|STARTED|REVIEWED)$/;
-const BAD = /(REJECTED|CANCELLED|FAILED|FLAGGED|REFUNDED)$/;
+const GOOD = /(APPROVED|COMPLETED|RECEIVED|STARTED|REVIEWED|VERIFIED)$/;
+const BAD = /(REJECTED|CANCELLED|FAILED|FLAGGED|REFUNDED|EXPIRED)$/;
 
 function iconFor(type: string): IconName {
+  if (type.startsWith("IDENTITY")) return "shield-checkmark";
   if (type.startsWith("APPLICATION") || type.startsWith("RISK")) return "document-text";
   if (type.startsWith("INTERVIEW")) return "people";
   if (type.startsWith("HOME_VISIT")) return "home";
@@ -54,6 +55,7 @@ export function getNotificationMeta(type?: string): NotificationMeta {
 /** Where tapping a notification should take the user (null = stay on the list). */
 export function getNotificationRoute(n: Pick<NotificationItem, "type" | "refModel" | "refId">): string | null {
   if (n.type === "CHAT_MESSAGE") return "/(tabs)/chat";
+  if (n.type?.startsWith("IDENTITY_") || n.refModel === "UserDocument") return "/documents";
   switch (n.refModel) {
     case "Application":
       return n.refId ? `/application-details/${n.refId}` : "/(tabs)/my-applications";

@@ -1,4 +1,5 @@
 const ScheduledJobLog = require("../models/ScheduledJobLog");
+const { runIdentityExpiry, runIdentityImageRetention } = require("../jobs/identityJobs");
 const { runVaccinationReminders, runDocumentExpiryReminders, runFosterReportMonitoring, runFosterEndDateAlerts, runMonitoringReportMonitoring } = require("../jobs/reminderJobs");
 
 const JOBS = {
@@ -7,6 +8,8 @@ const JOBS = {
   foster_report_monitoring: runFosterReportMonitoring,
   foster_end_date_alerts: runFosterEndDateAlerts,
   monitoring_report_monitoring: runMonitoringReportMonitoring,
+  identity_expiry: runIdentityExpiry,
+  identity_image_retention: runIdentityImageRetention,
 };
 
 // GET /api/scheduled-jobs — list known job keys + their most recent run

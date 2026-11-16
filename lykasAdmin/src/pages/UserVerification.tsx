@@ -1,90 +1,114 @@
 import { useState } from "react";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { Eye } from "lucide-react";
 import { useResourceList } from "../hooks/useResourceList";
-import { api, getApiErrorMessage } from "../services/api";
 import { PageHeader } from "../components/ui/SharedUI";
 import DataTable, { type Column } from "../components/ui/DataTable";
 import StatusBadge from "../components/ui/StatusBadge";
-import { useToast } from "../context/ToastContext";
 import IconButton from "../components/ui/IconButton";
+import IdentityReviewModal from "../components/identity/IdentityReviewModal";
+import { useToast } from "../context/ToastContext";
+import { ID_TYPE_LABELS, type IdentityQueueRow } from "../types/identity";
 
-interface VerificationRow {
-  _id: string;
-  displayName: string;
-  email: string;
-  identityVerificationStatus: string;
-  idDocumentUrl?: string | null;
-  phone?: string | null;
-  address?: string | null;
-  phoneVerified: boolean;
-  addressConfirmed: boolean;
-}
-
+/**
+ * Identity verification queue. This page never changes an identity status
+ * itself: every decision is a POST to the backend verification service, which
+ * re-checks the reviewer's role, the document, the checklist and the status
+ * transition. Email verification and per-application documents are separate
+ * (see Document Review).
+ */
 export default function UserVerification() {
-  const list = useResourceList<VerificationRow>("/api/auth/users/verification-queue");
+  const list = useResourceList<IdentityQueueRow>("/api/identity/queue");
   const { showToast } = useToast();
-  const [actingOn, setActingOn] = useState<string | null>(null);
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
 
-  async function decide(user: VerificationRow, status: "verified" | "rejected") {
-    setActingOn(user._id);
-    try {
-      await api.put(`/api/auth/users/${user._id}/verification`, { identityVerificationStatus: status });
-      showToast(`Identity ${status}`, "success");
-      list.reload();
-    } catch (err) {
-      showToast(getApiErrorMessage(err, "Failed to update verification"), "error");
-    } finally {
-      setActingOn(null);
-    }
-  }
-
-  const columns: Column<VerificationRow>[] = [
-    { key: "displayName", header: "Name", accessor: (u) => u.displayName },
-    { key: "email", header: "Email", accessor: (u) => u.email },
-    { key: "phone", header: "Phone", accessor: (u) => u.phone || "—" },
-    { key: "address", header: "Address", accessor: (u) => u.address || "—" },
+  const columns: Column<IdentityQueueRow>[] = [
     {
-      key: "idDocumentUrl",
-      header: "ID file",
-      accessor: (u) =>
-        u.idDocumentUrl ? (
-          <a href={u.idDocumentUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
-            View ID
-          </a>
-        ) : (
-          "—"
-        ),
+      key: "applicant",
+      header: "Applicant",
+      accessor: (r) => (
+        <div>
+          <p className="font-medium">{r.user?.displayName}</p>
+          <p className="text-xs text-gray-500">{r.user?.email}</p>
+        </div>
+      ),
     },
-    { key: "identityVerificationStatus", header: "ID status", accessor: (u) => <StatusBadge status={u.identityVerificationStatus} /> },
+    { key: "idType", header: "ID type", accessor: (r) => (r.idType ? ID_TYPE_LABELS[r.idType] ?? r.idType : "Legacy upload") },
+    {
+      key: "expiresAt",
+      header: "Expiry",
+      accessor: (r) => (
+        <span className={r.isExpired ? "font-medium text-status-danger" : ""}>
+          {r.expiresAt ? new Date(r.expiresAt).toLocaleDateString() : "—"}
+          {r.isExpired ? " (expired)" : ""}
+        </span>
+      ),
+    },
+    {
+      key: "createdAt",
+      header: "Submitted",
+      accessor: (r) => (
+        <div>
+          {new Date(r.createdAt).toLocaleDateString()}
+          {r.isRenewal && <span className="ml-1 text-xs text-gray-500">renewal</span>}
+          {r.submissionChannel === "staff_assisted" && <span className="ml-1 text-xs text-gray-500">walk-in</span>}
+        </div>
+      ),
+    },
+    { key: "status", header: "Status", accessor: (r) => <StatusBadge status={r.status} /> },
   ];
 
   return (
     <div>
-      <PageHeader title="User Verification" description="Identity verification queue — pending applicants." />
+      <PageHeader
+        title="Identity Verification"
+        description="Review government IDs. This is a staff visual assessment, not a check against any government database. Email verification and application documents are separate."
+      />
       <DataTable
         columns={columns}
         rows={list.rows}
-        rowKey={(u) => u._id}
+        rowKey={(r) => r._id}
         loading={list.loading}
         error={list.error}
         onRetry={list.reload}
-        emptyTitle="No pending verifications"
+        emptyTitle="No identity documents in this view"
         searchValue={list.search}
         onSearchChange={list.onSearchChange}
+        filters={[
+          {
+            key: "status",
+            label: "Status",
+            options: [
+              { value: "pending", label: "Pending review" },
+              { value: "resubmission_required", label: "Resubmission required" },
+              { value: "rejected", label: "Rejected" },
+              { value: "expired", label: "Expired" },
+              { value: "verified", label: "Verified" },
+              { value: "all", label: "All" },
+            ],
+          },
+        ]}
+        filterValues={list.filters}
+        onFilterChange={list.onFilterChange}
         page={list.pagination.page}
         pages={list.pagination.pages}
         total={list.pagination.total}
         onPageChange={list.setPage}
-        rowActions={(u) => (
+        rowActions={(r) => (
           <div className="flex justify-end gap-1">
-            <IconButton label="Verify identity" tone="success" disabled={actingOn === u._id} onClick={() => decide(u, "verified")}>
-              <CheckCircle2 className="h-4 w-4" />
-            </IconButton>
-            <IconButton label="Reject identity" tone="danger" disabled={actingOn === u._id} onClick={() => decide(u, "rejected")}>
-              <XCircle className="h-4 w-4" />
+            <IconButton label={r.status === "pending" ? "Review ID" : "View ID record"} onClick={() => setReviewingId(r._id)}>
+              <Eye className="h-4 w-4" />
             </IconButton>
           </div>
         )}
+      />
+      <IdentityReviewModal
+        documentId={reviewingId}
+        onClose={() => setReviewingId(null)}
+        onDecided={(message) => {
+          showToast(message, "success");
+          setReviewingId(null);
+          list.reload();
+        }}
       />
     </div>
   );

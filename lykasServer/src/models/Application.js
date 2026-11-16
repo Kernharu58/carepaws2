@@ -58,6 +58,15 @@ const applicationSchema = new mongoose.Schema(
     stageHistory: [stageHistoryEntrySchema],
     reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     reviewedAt: { type: Date, default: null },
+    // Which identity record the server relied on when this application was
+    // accepted. Informational/traceability only - eligibility is always
+    // re-evaluated from the authoritative document, never read from here.
+    identityCheck: {
+      status: { type: String, default: null },
+      document: { type: mongoose.Schema.Types.ObjectId, ref: "UserDocument", default: null },
+      policy: { type: String, default: null },
+      checkedAt: { type: Date, default: null },
+    },
     internalNotes: [internalNoteSchema],
   },
   { timestamps: true }

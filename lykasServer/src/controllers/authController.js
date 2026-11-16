@@ -33,6 +33,7 @@ function publicUser(user) {
     emailVerified: user.emailVerified,
     profilePicture: user.profilePicture,
     identityVerificationStatus: user.identityVerificationStatus,
+    identityExpiresAt: user.identityExpiresAt || null,
     notificationsEnabled: user.notificationsEnabled,
     phone: user.phone,
     address: user.address,
@@ -535,22 +536,18 @@ async function listUsers(req, res, next) {
 }
 
 // GET /api/auth/users/verification-queue — admin
+// Kept for older clients. It now reads the same identity queue as
+// GET /api/identity/queue (pending government-ID documents) and no longer
+// exposes any file URL; images are fetched through the authorised file endpoint.
+// Reviewing (not just viewing) the queue is limited to identity reviewers.
 async function verificationQueue(req, res, next) {
   try {
-    const users = await User.find({ identityVerificationStatus: "pending" }).sort({ updatedAt: 1 });
-    // Attach each user's most recent government ID file so staff can open it
-    // straight from the queue.
-    const UserDocument = require("../models/UserDocument");
-    const docs = await UserDocument.find({ user: { $in: users.map((u) => u._id) }, type: "government_id" })
-      .sort({ createdAt: -1 })
-      .select("user fileUrl");
-    const idByUser = new Map();
-    for (const d of docs) {
-      const key = d.user.toString();
-      if (!idByUser.has(key)) idByUser.set(key, d.fileUrl);
+    const identity = require("../services/identityVerificationService");
+    if (!identity.isReviewer(req.user)) {
+      return res.status(403).json({ success: false, code: "NOT_AUTHORIZED", message: "You are not authorised to view identity documents" });
     }
-    const data = users.map((u) => ({ ...u.toObject(), idDocumentUrl: idByUser.get(u._id.toString()) || null }));
-    return res.json({ success: true, data });
+    const { data, pagination } = await identity.listQueue({ status: "pending", limit: 100 });
+    return res.json({ success: true, data, pagination });
   } catch (err) {
     next(err);
   }
@@ -614,21 +611,17 @@ async function updateUserStatus(req, res, next) {
 }
 
 // PUT /api/auth/users/:id/verification — admin
-async function updateUserVerification(req, res, next) {
-  try {
-    const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ success: false, message: "User not found" });
-
-    user.identityVerificationStatus = req.body.identityVerificationStatus;
-    user.identityVerifiedBy = req.user._id;
-    user.identityVerifiedAt = new Date();
-    user.identityVerificationNotes = req.body.notes;
-    await user.save();
-
-    return res.json({ success: true, data: publicUser(user) });
-  } catch (err) {
-    next(err);
-  }
+// RETIRED. This endpoint let any staff member mark a user "verified" without a
+// government ID ever being uploaded or reviewed. Identity status can now only
+// change through the review of an actual ID document:
+//   POST /api/identity/documents/:id/review
+async function updateUserVerification(req, res) {
+  return res.status(410).json({
+    success: false,
+    code: "ENDPOINT_RETIRED",
+    message: "Identity status can no longer be set directly. Review the applicant's ID document instead.",
+    use: "POST /api/identity/documents/:id/review",
+  });
 }
 
 // DELETE /api/auth/users/:id — soft delete, admin

@@ -20,7 +20,7 @@ const Application = require("../../src/models/Application");
 async function registerAndLogin(email, role = "user") {
   const res = await request(app)
     .post("/api/auth/register")
-    .send({ displayName: "Test " + role, email, password: "password123" });
+    .send({ acceptedTerms: true, displayName: "Test " + role, email, password: "password123" });
 
   // These suites exercise actions gated by requireVerifiedEmail; verification itself is covered in emailVerification.test.js.
   await User.findOneAndUpdate({ email }, { emailVerified: true });

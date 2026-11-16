@@ -24,6 +24,7 @@ const STATUS_TONE_MAP: Record<string, Tone> = {
   attended: "success",
 
   pending: "warning",
+  resubmission_required: "warning",
   "in_review": "warning",
   "in progress": "warning",
   scheduled: "warning",
@@ -37,10 +38,14 @@ const STATUS_TONE_MAP: Record<string, Tone> = {
   failed: "danger",
   critical: "danger",
   overdue: "danger",
+  expired: "danger",
 
   inactive: "neutral",
   archived: "neutral",
   draft: "neutral",
+  unverified: "neutral",
+  superseded: "neutral",
+  withdrawn: "neutral",
 };
 
 interface StatusBadgeProps {

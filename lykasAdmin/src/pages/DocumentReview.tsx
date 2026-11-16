@@ -16,10 +16,18 @@ interface UserDocument {
   user: { displayName: string; email: string };
   application?: { _id: string; stage: string; status: string; pet?: { name: string } };
   type: string;
-  fileUrl: string;
+  hasFile?: boolean;
   status: string;
   rejectedReason?: string;
   createdAt: string;
+}
+
+// Files are private: fetched with the reviewer's credentials and opened from memory.
+async function openProtectedFile(documentId: string) {
+  const res = await api.get(`/api/documents/${documentId}/file`, { responseType: "blob" });
+  const url = URL.createObjectURL(res.data as Blob);
+  window.open(url, "_blank", "noopener");
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export default function DocumentReview() {
@@ -64,11 +72,18 @@ export default function DocumentReview() {
     {
       key: "fileUrl",
       header: "File",
-      accessor: (d) => (
-        <a href={d.fileUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-primary hover:underline">
-          <FileText className="h-3.5 w-3.5" aria-hidden="true" /> View
-        </a>
-      ),
+      accessor: (d) =>
+        d.hasFile === false ? (
+          <span className="text-xs text-gray-500">Removed</span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => openProtectedFile(d._id).catch((err) => showToast(getApiErrorMessage(err, "Could not open the file"), "error"))}
+            className="flex items-center gap-1 text-primary hover:underline"
+          >
+            <FileText className="h-3.5 w-3.5" aria-hidden="true" /> View
+          </button>
+        ),
     },
     {
       key: "status",
@@ -84,7 +99,7 @@ export default function DocumentReview() {
 
   return (
     <div>
-      <PageHeader title="Document Review" description="Verify uploaded identity and adoption documents." />
+      <PageHeader title="Document Review" description="Verify the supporting documents applicants upload for their applications. Government IDs are reviewed separately under Identity Verification." />
       <DataTable
         columns={columns}
         rows={list.rows}

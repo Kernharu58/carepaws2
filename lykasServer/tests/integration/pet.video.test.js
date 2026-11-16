@@ -21,15 +21,18 @@ jest.mock("../../src/config/cloudinary", () => mockCloudinary);
 
 const { app } = require("../../src/server");
 const User = require("../../src/models/User");
+const { markIdentityVerified } = require("../helpers/identity");
 const Pet = require("../../src/models/Pet");
 
 async function registerAndLogin(email, role = "user") {
   const res = await request(app)
     .post("/api/auth/register")
-    .send({ displayName: "Test " + role, email, password: "password123" });
+    .send({ acceptedTerms: true, displayName: "Test " + role, email, password: "password123" });
 
   // These suites exercise actions gated by requireVerifiedEmail; verification itself is covered in emailVerification.test.js.
   await User.findOneAndUpdate({ email }, { emailVerified: true });
+  // Applications now require a genuinely verified identity (see identity.verification tests).
+  await markIdentityVerified(email);
 
   if (role !== "user") {
     await User.findOneAndUpdate({ email }, { role });

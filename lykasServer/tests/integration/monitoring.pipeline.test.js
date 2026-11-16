@@ -21,7 +21,7 @@ const { runMonitoringReportMonitoring } = require("../../src/jobs/reminderJobs")
 async function registerAndLogin(email, role = "user") {
   const res = await request(app)
     .post("/api/auth/register")
-    .send({ displayName: "Test " + role, email, password: "password123" });
+    .send({ acceptedTerms: true, displayName: "Test " + role, email, password: "password123" });
 
   if (role !== "user") {
     await User.findOneAndUpdate({ email }, { role });

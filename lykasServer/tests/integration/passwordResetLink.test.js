@@ -33,7 +33,7 @@ beforeEach(() => {
 });
 
 async function requestReset(email = "member@example.com") {
-  await request(app).post("/api/auth/register").send({ displayName: "Member", email, password: "password123" });
+  await request(app).post("/api/auth/register").send({ acceptedTerms: true, displayName: "Member", email, password: "password123" });
   sendTemplatedEmail.mockClear();
   const res = await request(app).post("/api/auth/forgot-password").send({ email });
   const call = sendTemplatedEmail.mock.calls.find(([arg]) => arg.templateKey === "password_reset");

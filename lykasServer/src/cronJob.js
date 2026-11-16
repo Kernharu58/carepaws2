@@ -1,5 +1,6 @@
 const cron = require("node-cron");
 const logger = require("./utils/logger");
+const { runIdentityExpiry, runIdentityImageRetention } = require("./jobs/identityJobs");
 const { runVaccinationReminders, runDocumentExpiryReminders, runFosterReportMonitoring, runFosterEndDateAlerts, runMonitoringReportMonitoring } = require("./jobs/reminderJobs");
 
 /**
@@ -39,8 +40,18 @@ function startCronJobs() {
     await runMonitoringReportMonitoring();
   });
 
+  // Identity verification: expire outdated IDs, then delete images past retention.
+  cron.schedule("50 7 * * *", async () => {
+    logger.info("Running scheduled job: identity_expiry");
+    await runIdentityExpiry();
+  });
+  cron.schedule("55 7 * * *", async () => {
+    logger.info("Running scheduled job: identity_image_retention");
+    await runIdentityImageRetention();
+  });
+
   logger.info(
-    "Cron jobs scheduled: vaccination_reminders (07:00), document_expiry_reminders (07:15), foster_report_monitoring (07:30), foster_end_date_alerts (07:40), monitoring_report_monitoring (07:45)"
+    "Cron jobs scheduled: identity_expiry (07:50), identity_image_retention (07:55), vaccination_reminders (07:00), document_expiry_reminders (07:15), foster_report_monitoring (07:30), foster_end_date_alerts (07:40), monitoring_report_monitoring (07:45)"
   );
 }
 
